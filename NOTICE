@@ -1,0 +1,8 @@
+grpc-lighton-ocr
+Copyright 2026 Pipestream
+
+This product includes a Document schema vendored from gRParse
+(https://github.com/ai-pipestream/gRParse), Apache-2.0.
+
+LightOnOCR-3 model weights are not included. Their licence is the one
+published with lightonai/LightOnOCR-3-0.8B and lightonai/LightOnOCR-3-4B.
