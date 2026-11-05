@@ -1,6 +1,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include <grpcpp/grpcpp.h>
 
@@ -21,6 +22,7 @@ void expect(bool ok, const std::string& message) {
 }
 
 struct Server {
+  std::unique_ptr<lighton::LightOnOcrServiceImpl> service;
   std::unique_ptr<grpc::Server> server;
   std::string address;
 };
@@ -29,11 +31,11 @@ Server start() {
   Server started;
   lighton::Config config;
   config.listen_address = "127.0.0.1:0";
-  auto* service = new lighton::LightOnOcrServiceImpl(config);
+  started.service = std::make_unique<lighton::LightOnOcrServiceImpl>(config);
   grpc::ServerBuilder builder;
   int selected = 0;
   builder.AddListeningPort("127.0.0.1:0", grpc::InsecureServerCredentials(), &selected);
-  builder.RegisterService(service);
+  builder.RegisterService(started.service.get());
   started.server = builder.BuildAndStart();
   started.address = "127.0.0.1:" + std::to_string(selected);
   return started;
@@ -55,6 +57,7 @@ int main() {
     expect(status.ok(), status.error_message());
     expect(!response.engine_loaded(), "engine is not loaded");
     expect(response.model_repo() == "lightonai/LightOnOCR-3-0.8B", response.model_repo());
+    expect(response.model() == locrv1::LIGHTON_MODEL_0_8B, "model enum");
   }
   {
     grpc::ClientContext context;
@@ -73,6 +76,7 @@ int main() {
     grpc::ClientContext context;
     auto stream = stub->ParseDocument(&context);
     locrv1::ParseDocumentRequest options;
+    options.mutable_options()->set_model(locrv1::LIGHTON_MODEL_0_8B);
     options.mutable_options()->set_page_count(1);
     locrv1::ParseDocumentRequest page;
     page.mutable_page()->set_page_no(1);
@@ -91,6 +95,7 @@ int main() {
     grpc::ClientContext context;
     auto stream = stub->ParseDocument(&context);
     locrv1::ParseDocumentRequest options;
+    options.mutable_options()->set_model(locrv1::LIGHTON_MODEL_0_8B);
     options.mutable_options()->set_page_count(1);
     locrv1::ParseDocumentRequest page;
     page.mutable_page()->set_page_no(1);
@@ -103,6 +108,22 @@ int main() {
     expect(stream->Read(&complete) && complete.has_complete(), "trailer");
     expect(stream->Finish().ok(), "empty raster still completes");
   }
+  for (const auto& [model, code] :
+       {std::pair{locrv1::LIGHTON_MODEL_UNSPECIFIED, grpc::StatusCode::INVALID_ARGUMENT},
+        std::pair{locrv1::LIGHTON_MODEL_4B, grpc::StatusCode::FAILED_PRECONDITION}}) {
+    grpc::ClientContext context;
+    auto stream = stub->ParseDocument(&context);
+    locrv1::ParseDocumentRequest options;
+    options.mutable_options()->set_model(model);
+    options.mutable_options()->set_page_count(1);
+    stream->Write(options);
+    stream->WritesDone();
+    locrv1::ParseDocumentResponse event;
+    expect(!stream->Read(&event), "no event for a rejected model");
+    const grpc::Status status = stream->Finish();
+    expect(status.error_code() == code, "model check: " + status.error_message());
+  }
+  expect(lighton::model_repo(locrv1::LIGHTON_MODEL_4B) == "lightonai/LightOnOCR-3-4B", "4b repo");
   server.server->Shutdown();
   if (failures != 0) return 1;
   std::cout << "service_test ok\n";

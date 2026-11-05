@@ -215,7 +215,7 @@ bool parse_lightonocr_markdown(const std::string& content, uint32_t page_no, uin
   }
   out->Clear();
   out->set_schema_name("docling_document_v2");
-  out->set_version("1.11.0");
+  out->set_version("1.10.0");
   out->set_name("page-" + std::to_string(page_no));
   out->mutable_body()->set_self_ref("#/body");
   out->mutable_body()->set_content_layer(docv1::CONTENT_LAYER_BODY);

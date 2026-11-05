@@ -1,5 +1,7 @@
 #pragma once
 
+#include <utility>
+
 #include <grpcpp/grpcpp.h>
 
 #include "ai/pipestream/lightonocr/v1/lighton_ocr.grpc.pb.h"

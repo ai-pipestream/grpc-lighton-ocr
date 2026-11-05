@@ -1,5 +1,7 @@
 #include "service/lighton_service.h"
 
+#include <cstdint>
+
 #include <map>
 #include <string>
 #include <utility>
@@ -9,6 +11,10 @@ namespace {
 
 grpc::Status invalid(const std::string& message) {
   return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, message);
+}
+
+grpc::Status precondition(const std::string& message) {
+  return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION, message);
 }
 
 grpc::Status exhausted(const std::string& message) {
@@ -22,8 +28,8 @@ grpc::Status LightOnOcrServiceImpl::GetServiceInfo(grpc::ServerContext* /*contex
                                                    locrv1::GetServiceInfoResponse* response) {
   response->set_listen_address(config_.listen_address);
   response->set_engine_loaded(false);
-  response->set_model_repo(config_.model_billion == 4 ? "lightonai/LightOnOCR-3-4B"
-                                                      : "lightonai/LightOnOCR-3-0.8B");
+  response->set_model(config_.model);
+  response->set_model_repo(model_repo(config_.model));
   return grpc::Status::OK;
 }
 
@@ -40,6 +46,12 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
         if (saw_options) return invalid("ParseOptions repeated");
         saw_options = true;
         options = request.options();
+        if (options.model() == locrv1::LIGHTON_MODEL_UNSPECIFIED) {
+          return invalid("ParseOptions.model is required");
+        }
+        if (options.model() != config_.model) {
+          return precondition("ParseOptions.model is not the checkpoint this process serves");
+        }
         if (options.page_count() == 0) return invalid("page_count is required");
         if (options.page_count() > config_.max_pages) return exhausted("page_count exceeds the cap");
         break;

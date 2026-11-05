@@ -28,7 +28,7 @@ int main() {
       "![footer](10, 960, 200, 990)\n"
       "1\n";
   expect(lighton::parse_lightonocr_markdown(reply, 1, 1000, 1000, &document, &error), error);
-  expect(document.version() == "1.11.0", "schema stamp");
+  expect(document.version() == "1.10.0", "schema stamp");
   expect(document.texts_size() == 3, "title, text, footer");
   expect(document.texts(0).has_title(), "first block is a title");
   expect(document.texts(0).title().base().text() == "# Introduction", "title text");

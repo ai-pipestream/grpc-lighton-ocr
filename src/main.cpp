@@ -1,11 +1,12 @@
-#include <cerrno>
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
 
-#include <csignal>
+#include <cerrno>
+#include <cstdio>
 #include <iostream>
 #include <memory>
+#include <stdexcept>
 
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
@@ -29,9 +30,14 @@ void install_shutdown_pipe() {
   }
   struct sigaction action = {};
   action.sa_handler = handle_shutdown;
-  ::sigaction(SIGINT, &action, nullptr);
-  ::sigaction(SIGTERM, &action, nullptr);
-  ::signal(SIGPIPE, SIG_IGN);
+  if (::sigaction(SIGINT, &action, nullptr) != 0 || ::sigaction(SIGTERM, &action, nullptr) != 0) {
+    throw std::runtime_error("shutdown signal handler install failed");
+  }
+  struct sigaction ignore = {};
+  ignore.sa_handler = SIG_IGN;
+  if (::sigaction(SIGPIPE, &ignore, nullptr) != 0) {
+    throw std::runtime_error("SIGPIPE ignore failed");
+  }
 }
 
 }  // namespace

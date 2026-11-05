@@ -41,7 +41,9 @@ message ParseDocumentRequest {
 
 // Per-document options, sent once as the first message.
 message ParseOptions {
-  // Which LightOnOCR-3 checkpoint to run. Unspecified means the 0.8B model.
+  // Which LightOnOCR-3 checkpoint to run. Required: UNSPECIFIED is
+  // INVALID_ARGUMENT, and a checkpoint other than the one this process
+  // serves is FAILED_PRECONDITION.
   LightonModel model = 1;
   // Number of pages in the document. Required, and at least 1.
   uint32 page_count = 2;
@@ -140,8 +142,10 @@ message GetServiceInfoResponse {
   string listen_address = 1;
   // True when a native engine is linked and its weights loaded.
   bool engine_loaded = 2;
-  // Hugging Face repo of the checkpoint this process would run.
+  // Hugging Face repo of the checkpoint this process serves.
   string model_repo = 3;
-  // Checkpoint revision, empty when no weights are loaded.
-  string revision = 4;
+  reserved 4;
+  reserved "revision";
+  // The checkpoint this process serves, set from GRPC_LIGHTON_MODEL.
+  LightonModel model = 5;
 }
