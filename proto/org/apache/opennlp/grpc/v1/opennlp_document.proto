@@ -31,429 +31,121 @@ option java_package = "org.apache.opennlp.grpc.v1";
 // The closed stemmer families supported by the service. Defined in the document
 // contract so typed stem annotations can retain their producer configuration.
 enum StemmerAlgorithm {
+  // No algorithm was selected.
   STEMMER_ALGORITHM_UNSPECIFIED = 0;
+  // Language-specific Snowball stemming.
   STEMMER_ALGORITHM_SNOWBALL = 1;
+  // The original English Porter stemming algorithm.
   STEMMER_ALGORITHM_PORTER = 2;
+  // A language-specific light stemmer.
   STEMMER_ALGORITHM_LIGHT = 3;
+  // A language-specific minimal stemmer.
   STEMMER_ALGORITHM_MINIMAL = 4;
+  // Dictionary-driven Hunspell stemming.
   STEMMER_ALGORITHM_HUNSPELL = 5;
 }
 
+// Canonical 1:1 NLP document: text in, annotations out.
+// The sentences list provides the shared base linguistic analysis
+// (computed once even when multiple chunk+embed groups are requested).
 message OpenNlpDocument {
+  // Caller-chosen document identifier. Opaque to the server; echoed back unchanged
+  // so a client can correlate the response with its request. May be empty.
   string doc_id = 1;
+  // The full source text being analyzed. On the request side this is the only
+  // required field of the document (a missing/blank value is rejected with
+  // INVALID_ARGUMENT). All AnnotationSpan offsets in the response index into this
+  // text. Returned verbatim on the response.
   string raw_text = 2;
+  // The language detected by PIPELINE_STEP_LANGUAGE_DETECT, as the predictor's code
+  // (the bundled OpenNLP detector emits ISO 639-3). Set only when that step ran.
   optional string detected_language = 3;
+  // Confidence in detected_language, in [0,1]. Set only when LANGUAGE_DETECT ran.
   optional float language_confidence = 4;
+  // Ranked language predictions, best first, with detected_language as the first
+  // entry. Set only when LANGUAGE_DETECT ran and
+  // AnalysisOptions.ranked_language_count > 0.
   repeated LanguageScore ranked_languages = 15;
+  // The per-sentence linguistic analysis: one entry per detected sentence, each
+  // carrying its tokens and whatever annotations the requested steps produced.
+  // This is the shared base analysis, computed once and reused across every
+  // requested chunk+embedding group.
   repeated AnnotatedSentence sentences = 5;
+  // Document-level aggregate statistics over the analyzed text. Populated when tokenization
+  // has run; POS-based densities require PIPELINE_STEP_POS_TAG and unique_lemma_count requires
+  // PIPELINE_STEP_LEMMATIZE.
   optional DocumentAnalytics analytics = 6;
+  // Opaque client-supplied metadata, echoed back verbatim. The server never
+  // writes first-class results here; it is a passthrough field only.
   google.protobuf.Struct metadata = 7;
+  // Sentence-level embeddings produced by PIPELINE_STEP_EMBED through the selected
+  // embedding model. Document centroids live in document_centroids; chunk-attached
+  // embeddings live inside chunk_embedding_groups.
   repeated EmbeddingResult embeddings = 8;
+  // Whole-document classification from PIPELINE_STEP_DOC_CATEGORIZE. Set only when
+  // that step ran.
   optional DocumentClassification classification = 9;
+
+  // Primary way to carry multiple independent chunk+embedding result groups
+  // from one analysis. Each group corresponds to one chunking strategy with
+  // its explicitly requested embedding models attached inside the chunks.
   repeated ChunkEmbeddingGroup chunk_embedding_groups = 10;
+
+  // Unit of every AnnotationSpan start/end offset in this document (uniform).
+  // Echoes the requested AnalysisOptions.offset_encoding; defaults to UTF-8 bytes.
   OffsetEncoding offset_encoding = 11;
+  // One document centroid per embedding model: the mean of the document's sentence-level
+  // embeddings for that model (granularity EMBEDDING_GRANULARITY_DOCUMENT), a single
+  // representative vector for the whole document. Set only when PIPELINE_STEP_EMBED produced
+  // sentence embeddings and AnalysisOptions.include_document_centroid is true.
   repeated EmbeddingResult document_centroids = 12;
+  // Result of PIPELINE_STEP_NORMALIZE: the normalized text together with the
+  // alignment that maps spans between it and raw_text. Unset when the step did
+  // not run.
   optional NormalizationResult normalization = 13;
+  // The document-shape view of every annotation this analysis
+  // produced: the same results as the fields above, rendered as named, typed
+  // annotation layers over raw_text. Servers at this version populate one layer
+  // per step that ran; a layer whose producing step did not run is absent.
+  // Spans use the document's offset_encoding, like every other span.
   DocumentLayers layers = 14;
 }
 
+// One ranked language prediction from PIPELINE_STEP_LANGUAGE_DETECT.
 message LanguageScore {
+  // The predictor's language code (the bundled OpenNLP detector emits ISO 639-3).
   string language = 1;
+  // Confidence in [0,1].
   float confidence = 2;
 }
 
+// One detected sentence and every annotation attached to it. Populated
+// incrementally as the requested pipeline steps run over this sentence.
 message AnnotatedSentence {
+  // Span of the sentence within the document text (from PIPELINE_STEP_SENTENCE_DETECT).
   AnnotationSpan sentence_span = 1;
+  // The sentence's tokens in order (from PIPELINE_STEP_TOKENIZE). Carries any
+  // per-token POS tags and lemmas added by later steps.
   repeated Token tokens = 2;
+  // Named entities found in this sentence (from PIPELINE_STEP_NER). Each entity's
+  // span indexes into the document text.
   repeated NamedEntity entities = 3;
+  // Classic syntactic (shallow) chunks (from ChunkerME or similar), per sentence.
+  // Distinct from the strategy-driven Chunk in chunk_embedding_groups.
   optional ChunkResult syntactic_chunks = 4;
+  // Constituency parse of this sentence (from PIPELINE_STEP_PARSE). The primary parse: the
+  // chosen engine's tree (default/pinned), or the highest-priority engine's tree under a union.
   optional ParseTree parse_tree = 5;
+  // Winning sentiment category for this sentence (from PIPELINE_STEP_SENTIMENT,
+  // which is per-sentence document categorization): the argmax label of the
+  // configured sentiment categorizer. Set only when SENTIMENT ran.
   optional string sentiment_label = 6;
+  // Score of the winning sentiment_label from the categorizer's score distribution,
+  // in [0,1]. Set only when SENTIMENT ran.
   optional float sentiment_confidence = 7;
+  // All constituency parses when more than one engine ran (a union, see
+  // AnalysisProfile.parse_engine_policy with two or more engines), each tagged with its
+  // producer. Empty for the single-engine default/pin case, where `parse_tree` is the only
+  // parse; when populated, `parse_tree` repeats its primary (highest-priority) element.
   repeated ParseTree parse_trees = 8;
-}
-
-message Token {
-  string text = 1;
-  AnnotationSpan annotation_span = 2;
-  optional string pos_tag = 3;
-  optional string lemma = 4;
-  optional float pos_probability = 5;
-  optional string word_type = 6;
-  map<string, string> term_layers = 7;
-  bool is_stopword = 8;
-}
-
-message NamedEntity {
-  AnnotationSpan annotation_span = 1;
-  string entity_type = 2;
-  optional double probability = 3;
-  string text = 4;
-  repeated EntitySource sources = 5;
-  reserved 6 to 9;
-  optional GeoResolutionResult geo = 10;
-  reserved 11 to 19;
-}
-
-message GeoResolutionResult {
-  string source = 1;
-  string record_id = 2;
-  string name = 3;
-  double latitude = 4;
-  double longitude = 5;
-  optional string country_code = 6;
-  repeated string containment = 7;
-  int64 population = 8;
-  optional string feature_class = 9;
-  double confidence = 10;
-}
-
-message EntitySource {
-  string recognizer_id = 1;
-  string engine = 2;
-  optional double probability = 3;
-  optional AnnotationSpan annotation_span = 4;
-}
-
-message AnnotationSpan {
-  int32 start = 1;
-  int32 end = 2;
-  CoordinateSpace space = 3;
-  optional string type = 4;
-  optional double probability = 5;
-}
-
-enum CoordinateSpace {
-  COORDINATE_SPACE_UNSPECIFIED = 0;
-  COORDINATE_SPACE_CHAR_DOCUMENT = 1;
-  COORDINATE_SPACE_TOKEN_SENTENCE = 2;
-}
-
-enum OffsetEncoding {
-  OFFSET_ENCODING_UNSPECIFIED = 0;
-  OFFSET_ENCODING_UTF8_BYTE = 1;
-  OFFSET_ENCODING_UTF16_CODE_UNIT = 2;
-  OFFSET_ENCODING_UNICODE_CODE_POINT = 3;
-}
-
-message DocumentAnalytics {
-  int32 total_tokens = 1;
-  int32 total_sentences = 2;
-  float noun_density = 3;
-  float verb_density = 4;
-  float adjective_density = 5;
-  float adverb_density = 6;
-  float content_word_ratio = 7;
-  int32 unique_lemma_count = 8;
-  float lexical_density = 9;
-}
-
-message ChunkResult { repeated ChunkSpan chunks = 1; }
-message ChunkSpan {
-  AnnotationSpan annotation_span = 1;
-  string chunk_tag = 2;
-  string text = 3;
-  repeated ChunkSource sources = 4;
-}
-message ChunkSource {
-  string chunker_id = 1;
-  string engine = 2;
-  optional AnnotationSpan annotation_span = 3;
-}
-message Chunk {
-  AnnotationSpan annotation_span = 1;
-  optional string chunk_tag = 2;
-  optional string text_content = 3;
-  repeated EmbeddingResult embeddings = 4;
-  repeated int32 contained_sentence_indices = 5;
-}
-enum StandardChunkingStrategy {
-  STANDARD_CHUNKING_STRATEGY_UNSPECIFIED = 0;
-  STANDARD_CHUNKING_STRATEGY_SENTENCE = 1;
-  STANDARD_CHUNKING_STRATEGY_TOKEN = 2;
-  STANDARD_CHUNKING_STRATEGY_SEMANTIC = 3;
-  STANDARD_CHUNKING_STRATEGY_CATEGORY = 4;
-}
-message ChunkingStrategySelector {
-  oneof kind {
-    StandardChunkingStrategy standard = 1;
-    string custom = 2;
-  }
-}
-message ChunkEmbeddingGroup {
-  string group_id = 1;
-  optional string chunk_config_id = 2;
-  repeated string embedding_model_ids = 3;
-  optional string result_set_name = 4;
-  repeated Chunk chunks = 5;
-  optional ChunkGroupStats stats = 6;
-  optional EmbeddingGranularity granularity = 7;
-  repeated EmbeddingResult centroids = 8;
-  ChunkingStrategySelector strategy = 9;
-}
-message ChunkGroupStats {
-  int32 chunk_count = 1;
-  int32 total_tokens = 2;
-  int64 processing_time_ms = 3;
-}
-message ParseTree {
-  ParseNode root = 1;
-  optional string penn_treebank = 2;
-  string parser_id = 3;
-  string engine = 4;
-}
-message ParseNode {
-  string label = 1;
-  AnnotationSpan span = 2;
-  repeated ParseNode children = 3;
-  optional double probability = 4;
-  ParseNodeKind kind = 5;
-  optional int32 token_index = 6;
-}
-enum ParseNodeKind {
-  PARSE_NODE_KIND_UNSPECIFIED = 0;
-  PARSE_NODE_KIND_NONTERMINAL = 1;
-  PARSE_NODE_KIND_TERMINAL = 2;
-}
-enum StandardEmbeddingBackend {
-  STANDARD_EMBEDDING_BACKEND_UNSPECIFIED = 0;
-  STANDARD_EMBEDDING_BACKEND_ONNX = 1;
-  STANDARD_EMBEDDING_BACKEND_CUDA = 2;
-  STANDARD_EMBEDDING_BACKEND_STATIC = 3;
-  STANDARD_EMBEDDING_BACKEND_TEI = 4;
-  STANDARD_EMBEDDING_BACKEND_OPENVINO = 5;
-}
-message EmbeddingBackendSelector {
-  oneof kind {
-    StandardEmbeddingBackend standard = 1;
-    string custom = 2;
-  }
-}
-message EmbeddingSelector {
-  string model_id = 1;
-  optional string backend_id = 2;
-  EmbeddingBackendSelector backend = 3;
-}
-message EmbeddingRoute {
-  string model_id = 1;
-  string backend_id = 2;
-  string vector_space_id = 3;
-  optional string artifact_hash = 4;
-  int32 priority = 5;
-  bool primary = 6;
-}
-message EmbeddingResult {
-  string model_id = 1;
-  repeated float vector = 2;
-  AnnotationSpan source_span = 3;
-  EmbeddingGranularity granularity = 4;
-  optional EmbeddingRoute route = 5;
-  VectorNormalization vector_normalization = 6;
-}
-enum VectorNormalization {
-  VECTOR_NORMALIZATION_UNSPECIFIED = 0;
-  VECTOR_NORMALIZATION_NONE = 1;
-  VECTOR_NORMALIZATION_L2 = 2;
-}
-enum EmbeddingGranularity {
-  EMBEDDING_GRANULARITY_UNSPECIFIED = 0;
-  EMBEDDING_GRANULARITY_DOCUMENT = 1;
-  EMBEDDING_GRANULARITY_SENTENCE = 2;
-  EMBEDDING_GRANULARITY_CHUNK_LEVEL = 3;
-  reserved 4 to 10;
-  EMBEDDING_GRANULARITY_GROUP_CENTROID = 11;
-}
-message NormalizationResult {
-  string normalized_text = 1;
-  repeated AlignmentRun alignment = 2;
-  repeated string applied_normalizers = 3;
-}
-message AlignmentRun {
-  int32 original_units = 1;
-  int32 normalized_units = 2;
-  bool equal = 3;
-}
-message DocumentClassification {
-  string best_category = 1;
-  map<string, double> category_scores = 2;
-}
-message DocumentLayers { repeated AnnotationLayer layers = 1; }
-enum StandardLayer {
-  STANDARD_LAYER_UNSPECIFIED = 0;
-  STANDARD_LAYER_SENTENCES = 1;
-  STANDARD_LAYER_TOKENS = 2;
-  STANDARD_LAYER_POS_TAGS = 3;
-  STANDARD_LAYER_LEMMAS = 4;
-  STANDARD_LAYER_ENTITIES = 5;
-  STANDARD_LAYER_SYNTACTIC_CHUNKS = 6;
-  STANDARD_LAYER_PARSES = 7;
-  STANDARD_LAYER_SENTIMENT = 8;
-  STANDARD_LAYER_LANGUAGE = 9;
-  STANDARD_LAYER_CATEGORIES = 10;
-  STANDARD_LAYER_EMBEDDINGS = 11;
-  STANDARD_LAYER_WORD_TYPES = 12;
-  STANDARD_LAYER_STOPWORDS = 13;
-  STANDARD_LAYER_TERMS = 14;
-  STANDARD_LAYER_SUBWORDS = 15;
-  STANDARD_LAYER_STEMS = 16;
-  STANDARD_LAYER_EXPANSIONS = 17;
-  STANDARD_LAYER_GEO = 18;
-  STANDARD_LAYER_NORMALIZATION = 19;
-  STANDARD_LAYER_ANALYTICS = 20;
-  STANDARD_LAYER_CHUNK_GROUPS = 21;
-  STANDARD_LAYER_TERM_VECTORS = 22;
-  STANDARD_LAYER_DEPENDENCIES = 23;
-  STANDARD_LAYER_RELATIONS = 24;
-}
-enum TermVectorMode {
-  TERM_VECTOR_MODE_UNSPECIFIED = 0;
-  TERM_VECTOR_MODE_FULL = 1;
-  TERM_VECTOR_MODE_SCORING_ONLY = 2;
-}
-message LayerIdentity {
-  oneof kind {
-    StandardLayer standard = 1;
-    string custom = 2;
-  }
-  optional string qualifier = 3;
-}
-message AnnotationLayer {
-  string id = 1;
-  LayerScope scope = 2;
-  oneof values {
-    StringAnnotationList string_values = 3;
-    CategoryAnnotationList category_values = 4;
-    EmbeddingAnnotationList embedding_values = 5;
-    TreeAnnotationList tree_values = 6;
-    SubwordAnnotationList subword_values = 7;
-    GeoAnnotationList geo_values = 8;
-    WordTypeAnnotationList word_type_values = 9;
-    EntityAnnotationList entity_values = 10;
-    SyntacticChunkAnnotationList syntactic_chunk_values = 11;
-    StemAnnotationList stem_values = 12;
-    LexicalExpansionAnnotationList lexical_expansion_values = 13;
-    NormalizationAnnotationList normalization_values = 14;
-    AnalyticsAnnotationList analytics_values = 15;
-    ChunkGroupAnnotationList chunk_group_values = 16;
-    TermVectorAnnotationList term_vector_values = 18;
-    DependencyAnnotationList dependency_values = 19;
-    RelationAnnotationList relation_values = 20;
-  }
-  LayerIdentity identity = 17;
-}
-enum LayerScope {
-  LAYER_SCOPE_UNSPECIFIED = 0;
-  LAYER_SCOPE_POSITIONAL = 1;
-  LAYER_SCOPE_DOCUMENT = 2;
-}
-message StringAnnotationList { repeated StringAnnotation annotations = 1; }
-message StringAnnotation {
-  optional AnnotationSpan span = 1;
-  string value = 2;
-  optional double probability = 3;
-}
-message CategoryAnnotationList { repeated CategoryAnnotation annotations = 1; }
-message CategoryAnnotation {
-  optional AnnotationSpan span = 1;
-  string label = 2;
-  double score = 3;
-}
-message EmbeddingAnnotationList { repeated EmbeddingAnnotation annotations = 1; }
-message EmbeddingAnnotation {
-  optional AnnotationSpan span = 1;
-  string model_id = 2;
-  repeated float vector = 3;
-  EmbeddingGranularity granularity = 4;
-  optional EmbeddingRoute route = 5;
-  VectorNormalization vector_normalization = 6;
-}
-message SubwordAnnotationList { repeated SubwordAnnotation annotations = 1; }
-message SubwordAnnotation {
-  AnnotationSpan span = 1;
-  string piece = 2;
-  int32 vocabulary_id = 3;
-}
-message GeoAnnotationList { repeated GeoAnnotation annotations = 1; }
-message GeoAnnotation {
-  AnnotationSpan span = 1;
-  GeoResolutionResult resolution = 2;
-}
-message TreeAnnotationList { repeated TreeAnnotation annotations = 1; }
-message TreeAnnotation {
-  AnnotationSpan span = 1;
-  ParseTree tree = 2;
-  repeated ParseTree alternatives = 3;
-}
-enum DocumentWordType {
-  DOCUMENT_WORD_TYPE_UNSPECIFIED = 0;
-  DOCUMENT_WORD_TYPE_ALPHANUMERIC = 1;
-  DOCUMENT_WORD_TYPE_NUMERIC = 2;
-  DOCUMENT_WORD_TYPE_IDEOGRAPHIC = 3;
-  DOCUMENT_WORD_TYPE_HIRAGANA = 4;
-  DOCUMENT_WORD_TYPE_KATAKANA = 5;
-  DOCUMENT_WORD_TYPE_HANGUL = 6;
-  DOCUMENT_WORD_TYPE_SOUTHEAST_ASIAN = 7;
-  DOCUMENT_WORD_TYPE_EMOJI = 8;
-}
-message WordTypeAnnotationList { repeated WordTypeAnnotation annotations = 1; }
-message WordTypeAnnotation {
-  AnnotationSpan span = 1;
-  DocumentWordType type = 2;
-}
-message EntityAnnotationList { repeated NamedEntity annotations = 1; }
-message SyntacticChunkAnnotationList { repeated ChunkSpan annotations = 1; }
-message StemAnnotationList { repeated StemAnnotation annotations = 1; }
-message StemAnnotation {
-  AnnotationSpan span = 1;
-  string stem = 2;
-  StemmerAlgorithm algorithm = 3;
-  optional string language = 4;
-  optional string hunspell_dictionary_id = 5;
-}
-enum LexicalExpansionKind {
-  LEXICAL_EXPANSION_KIND_UNSPECIFIED = 0;
-  LEXICAL_EXPANSION_KIND_SYNONYM = 1;
-  LEXICAL_EXPANSION_KIND_HYPERNYM = 2;
-  LEXICAL_EXPANSION_KIND_HYPONYM = 3;
-}
-message LexicalExpansionAnnotationList { repeated LexicalExpansionAnnotation annotations = 1; }
-message LexicalExpansionAnnotation {
-  AnnotationSpan span = 1;
-  string term = 2;
-  LexicalExpansionKind kind = 3;
-  int32 depth = 4;
-  int32 sense_rank = 5;
-  double weight = 6;
-  string lexicon_id = 7;
-}
-message NormalizationAnnotationList { repeated NormalizationResult annotations = 1; }
-message AnalyticsAnnotationList { repeated DocumentAnalytics annotations = 1; }
-message ChunkGroupAnnotationList { repeated ChunkEmbeddingGroup annotations = 1; }
-message TermVectorAnnotationList {
-  repeated TermVectorAnnotation annotations = 1;
-  TermVectorMode mode = 2;
-  LayerIdentity source_layer = 3;
-}
-message TermVectorAnnotation {
-  string term = 1;
-  int32 frequency = 2;
-  repeated AnnotationSpan occurrences = 3;
-}
-message DependencyAnnotationList {
-  repeated DependencyAnnotation annotations = 1;
-  string parser_id = 2;
-  string engine = 3;
-}
-message DependencyAnnotation {
-  AnnotationSpan span = 1;
-  int32 head_token_index = 2;
-  int32 dependent_token_index = 3;
-  string relation = 4;
-}
-message RelationAnnotationList { repeated RelationAnnotation annotations = 1; }
-message RelationAnnotation {
-  AnnotationSpan span = 1;
-  string type = 2;
-  int32 subject_entity_index = 3;
-  int32 object_entity_index = 4;
 }
