@@ -1,0 +1,19 @@
+version: v2
+modules:
+  - path: proto
+lint:
+  # Strictest built-in rule set plus mandatory documentation comments.
+  # Comment ignores are disallowed: fix the proto, not the linter.
+  use:
+    - STANDARD
+    - COMMENTS
+  disallow_comment_ignores: true
+  ignore_only:
+    # The document schema is vendored byte-identical from gRParse.
+    COMMENTS:
+      - proto/ai/pipestream/document/v1/document.proto
+      - proto/org/apache/opennlp/grpc/v1/opennlp_annotations.proto
+      - proto/org/apache/opennlp/grpc/v1/opennlp_document.proto
+breaking:
+  use:
+    - FILE
