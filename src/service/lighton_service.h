@@ -12,8 +12,8 @@ namespace lighton {
 namespace locrv1 = ai::pipestream::lightonocr::v1;
 
 // The native weight engine is not linked. GetServiceInfo reports that, and
-// a page with bytes fails PAGE_FAILURE_CODE_ENGINE_UNAVAILABLE after the
-// stream has been checked. The markdown parser is covered by its own test
+// a page with bytes fails PAGE_FAILURE_CODE_ENGINE_UNAVAILABLE as soon as
+// that page has been checked, without retaining its raster. The markdown parser is covered by its own test
 // and runs once a decode produces text.
 class LightOnOcrServiceImpl final : public locrv1::LightOnOcrService::Service {
  public:

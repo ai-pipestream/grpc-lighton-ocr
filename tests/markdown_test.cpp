@@ -42,6 +42,20 @@ int main() {
   lighton::docv1::Document empty;
   expect(!lighton::parse_lightonocr_markdown("   ", 1, 0, 0, &empty, &error),
          "empty reply is an error");
+  try {
+    expect(!lighton::parse_lightonocr_markdown(
+        "![text](999999999999999999999999,0,1000,1000)\ntext", 1, 1000, 1000,
+        &document, &error), "overflow coordinates rejected");
+  } catch (...) { expect(false, "coordinate overflow must not throw"); }
+  expect(lighton::parse_lightonocr_markdown(
+      "![image](0,0,1000,1000)\nA red boat.", 1, 1000, 1000, &document, &error), error);
+  expect(document.pictures_size() == 1 && document.texts_size() == 1,
+         "picture description retained");
+  if (document.texts_size() == 1) {
+    expect(document.texts(0).text().base().text() == "A red boat.", "description text");
+    expect(document.texts(0).text().base().parent().ref() == "#/pictures/0", "description parent");
+    expect(document.pictures(0).captions_size() == 1, "caption reference");
+  }
   if (failures != 0) return 1;
   std::cout << "markdown_test ok\n";
   return 0;

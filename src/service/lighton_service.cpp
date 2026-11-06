@@ -2,7 +2,8 @@
 
 #include <cstdint>
 
-#include <map>
+#include <cmath>
+#include <set>
 #include <string>
 #include <utility>
 
@@ -34,18 +35,24 @@ grpc::Status LightOnOcrServiceImpl::GetServiceInfo(grpc::ServerContext* /*contex
 }
 
 grpc::Status LightOnOcrServiceImpl::ParseDocument(
-    grpc::ServerContext* /*context*/,
+    grpc::ServerContext* context,
     grpc::ServerReaderWriter<locrv1::ParseDocumentResponse, locrv1::ParseDocumentRequest>* stream) {
   locrv1::ParseDocumentRequest request;
   bool saw_options = false;
   locrv1::ParseOptions options;
-  std::map<uint32_t, locrv1::PageImage> pages;
+  std::set<uint32_t> pages;
+  uint32_t failed = 0;
   while (stream->Read(&request)) {
+    if (context->IsCancelled()) return {grpc::StatusCode::CANCELLED, "request cancelled"};
     switch (request.payload_case()) {
       case locrv1::ParseDocumentRequest::kOptions:
         if (saw_options) return invalid("ParseOptions repeated");
         saw_options = true;
         options = request.options();
+        if (!locrv1::LightonModel_IsValid(options.model())) return invalid("unknown model");
+        if (!std::isfinite(options.temperature()) || options.temperature() < 0) {
+          return invalid("temperature must be finite and nonnegative");
+        }
         if (options.model() == locrv1::LIGHTON_MODEL_UNSPECIFIED) {
           return invalid("ParseOptions.model is required");
         }
@@ -63,37 +70,34 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
         }
         if (pages.contains(page.page_no())) return invalid("page_no repeated");
         if (page.png().size() > config_.max_page_bytes) return exhausted("page exceeds the byte cap");
-        pages.emplace(page.page_no(), page);
+        pages.insert(page.page_no());
+        locrv1::ParseDocumentResponse event;
+        auto* failure = event.mutable_page_failure();
+        failure->set_page_no(page.page_no());
+        failure->set_code(page.png().empty() ? locrv1::PAGE_FAILURE_CODE_BAD_IMAGE
+                                            : locrv1::PAGE_FAILURE_CODE_ENGINE_UNAVAILABLE);
+        failure->set_message(page.png().empty() ? "page raster is empty"
+                                               : "native LightOnOCR engine is not loaded");
+        if (!stream->Write(event)) return {grpc::StatusCode::CANCELLED, "response stream closed"};
+        ++failed;
+        // Keep page numbers for duplicate detection, never retain raster payloads.
+        request.Clear();
         break;
       }
       case locrv1::ParseDocumentRequest::PAYLOAD_NOT_SET:
         return invalid("empty ParseDocumentRequest");
     }
   }
+  if (context->IsCancelled()) return {grpc::StatusCode::CANCELLED, "request cancelled"};
   if (!saw_options) return invalid("missing ParseOptions");
   if (pages.size() != options.page_count()) return invalid("fewer pages than page_count");
 
-  uint32_t failed = 0;
-  for (const auto& [page_no, page] : pages) {
-    locrv1::ParseDocumentResponse event;
-    locrv1::PageFailure* failure = event.mutable_page_failure();
-    failure->set_page_no(page_no);
-    if (page.png().empty()) {
-      failure->set_code(locrv1::PAGE_FAILURE_CODE_BAD_IMAGE);
-      failure->set_message("page raster is empty");
-    } else {
-      failure->set_code(locrv1::PAGE_FAILURE_CODE_ENGINE_UNAVAILABLE);
-      failure->set_message("native LightOnOCR engine is not loaded");
-    }
-    if (!stream->Write(event)) return grpc::Status::OK;
-    failed++;
-  }
   locrv1::ParseDocumentResponse trailer;
   locrv1::ParseComplete* complete = trailer.mutable_complete();
   complete->set_pages(options.page_count());
   complete->set_pages_ok(0);
   complete->set_pages_failed(failed);
-  stream->Write(trailer);
+  if (!stream->Write(trailer)) return {grpc::StatusCode::CANCELLED, "response stream closed"};
   return grpc::Status::OK;
 }
 

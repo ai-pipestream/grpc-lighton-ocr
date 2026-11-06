@@ -8,7 +8,9 @@ ships as its own container so it can scale apart from gRParse and from
 image, and CI are in place. The native weight engine is not linked yet.
 `GetServiceInfo` reports `engine_loaded = false`, and a page raster returns
 `PAGE_FAILURE_CODE_ENGINE_UNAVAILABLE`. The parser is what will turn a
-decode into `Document` items.
+decode into `Document` items. Current tests exercise the parser and failure
+paths, not image-to-text inference. Table markup is still retained as text;
+typed table extraction and continuation-block joining are unfinished.
 
 The service is `ai.pipestream.lightonocr.v1.LightOnOcrService` on port
 **50074**. The gRParse coordinator does not dial this service yet; setting
@@ -56,3 +58,19 @@ byte-identical from gRParse. `buf lint` and `buf format` run in CI.
 ## Licence
 
 Apache-2.0.
+
+## Native engine work remaining
+
+The declared 0.8B and 4B checkpoints use Qwen3.5, per the
+[upstream model card](https://huggingface.co/lightonai/LightOnOCR-3-0.8B).
+A candidate C++ integration is libllama plus libmtmd, with an image decoded
+from its input buffer, a bounded decode loop, and cancellation checked
+between decode steps. This is a proposed path, not implemented support.
+No checkpoint or projector checksums are pinned in `models/MANIFEST` yet.
+
+Before advertising either checkpoint as working, pin the native library and
+converted model/projector artifacts, verify preprocessing and the grounding
+prompt against upstream, and run an actual image-to-text fixture through the
+read-only service container. Record the model revision and output, test
+resource limits and cancellation, then add the gRParse client route. The
+existing parser and stub tests do not satisfy that gate.

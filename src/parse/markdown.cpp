@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <regex>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -188,6 +189,16 @@ void add_picture(docv1::Document* document, const Block& block, uint32_t page_no
   prov->set_page_no(static_cast<int32_t>(page_no));
   set_box(prov, block, width, height);
   parent->add_children()->set_ref(ref);
+  if (!trim_copy(block.text).empty()) {
+    auto* caption = add_text(document, block, page_no, width, height,
+                             docv1::DOC_ITEM_LABEL_CAPTION, 0);
+    // Descriptions and chart markup belong to the picture. Preserve the
+    // text even before typed chart/table extraction is implemented.
+    parent->mutable_children()->RemoveLast();
+    caption->mutable_parent()->set_ref(ref);
+    picture->add_children()->set_ref(caption->self_ref());
+    picture->add_captions()->set_ref(caption->self_ref());
+  }
 }
 
 docv1::DocItemLabel label_of(const std::string& label) {
@@ -227,7 +238,15 @@ bool parse_lightonocr_markdown(const std::string& content, uint32_t page_no, uin
     page.mutable_size()->set_width(width_px);
     page.mutable_size()->set_height(height_px);
   }
-  for (const Block& block : split_blocks(body)) {
+  std::vector<Block> blocks;
+  try {
+    blocks = split_blocks(body);
+  } catch (const std::out_of_range&) {
+    out->Clear();
+    *error = "grounding coordinate exceeds the integer range";
+    return false;
+  }
+  for (const Block& block : blocks) {
     const std::string text = trim_copy(block.text);
     if (text.empty() && !picture_label(block.label)) continue;
     if (picture_label(block.label)) {
