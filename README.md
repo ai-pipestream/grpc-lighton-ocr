@@ -11,7 +11,15 @@ image, and CI are in place. The native weight engine is not linked yet.
 decode into `Document` items.
 
 The service is `ai.pipestream.lightonocr.v1.LightOnOcrService` on port
-**50074**. gRParse dials it with `GRPARSE_LIGHTON_OCR_TARGET`.
+**50074**. The gRParse coordinator does not dial this service yet; setting
+`GRPARSE_LIGHTON_OCR_TARGET` does not enable a parse route. The proposed
+compose integration is an opt-in service shell, not an OCR implementation.
+
+The standard gRPC health RPC indicates transport availability only. Use
+`GetServiceInfo.engine_loaded` to check inference readiness, and inspect
+page failures and completion counts even when the stream status is OK.
+The process holds request bytes in memory and needs no writable request
+directory. Model files are separate from request data.
 
 ## Build and test
 
