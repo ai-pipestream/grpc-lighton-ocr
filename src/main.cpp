@@ -3,6 +3,7 @@
 #include <unistd.h>
 
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <iostream>
 #include <memory>
@@ -20,13 +21,21 @@ namespace {
 int g_shutdown_pipe[2] = {-1, -1};
 
 void handle_shutdown(int /*signum*/) {
-  char one = 1;
+  const int saved_errno = errno;
+  const char one = 1;
+  // A full pipe already records shutdown. Never block inside a signal handler.
   [[maybe_unused]] ssize_t n = ::write(g_shutdown_pipe[1], &one, 1);
+  errno = saved_errno;
 }
 
 void install_shutdown_pipe() {
   if (::pipe2(g_shutdown_pipe, O_CLOEXEC) != 0) {
     throw std::runtime_error("shutdown pipe creation failed");
+  }
+  // Keep the reader blocking, but make repeated signals safe even if the
+  // process has not reached its shutdown read yet.
+  if (::fcntl(g_shutdown_pipe[1], F_SETFL, O_NONBLOCK) == -1) {
+    throw std::runtime_error("shutdown pipe nonblocking setup failed");
   }
   struct sigaction action = {};
   action.sa_handler = handle_shutdown;
@@ -60,12 +69,18 @@ int main() {
       std::cerr << "Unable to listen on " << config.listen_address << '\n';
       return 1;
     }
+    auto* health = server->GetHealthCheckService();
+    health->SetServingStatus(lighton::locrv1::LightOnOcrService::service_full_name(),
+                             service.engine_loaded());
+    // The empty health service name remains transport liveness. Callers that
+    // route OCR requests must check the fully qualified service name.
     std::cout << "grpc-lighton-ocr listening on " << config.listen_address << '\n';
 
     char byte = 0;
     while (::read(g_shutdown_pipe[0], &byte, 1) < 0 && errno == EINTR) {
     }
-    server->Shutdown();
+    health->SetServingStatus(false);
+    server->Shutdown(std::chrono::system_clock::now() + std::chrono::seconds(5));
     server->Wait();
     return 0;
   } catch (const std::exception& ex) {

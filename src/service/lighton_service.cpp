@@ -28,7 +28,7 @@ grpc::Status LightOnOcrServiceImpl::GetServiceInfo(grpc::ServerContext* /*contex
                                                    const locrv1::GetServiceInfoRequest* /*request*/,
                                                    locrv1::GetServiceInfoResponse* response) {
   response->set_listen_address(config_.listen_address);
-  response->set_engine_loaded(false);
+  response->set_engine_loaded(engine_loaded());
   response->set_model(config_.model);
   response->set_model_repo(model_repo(config_.model));
   return grpc::Status::OK;

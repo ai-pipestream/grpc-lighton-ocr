@@ -56,6 +56,14 @@ int main() {
     expect(document.texts(0).text().base().parent().ref() == "#/pictures/0", "description parent");
     expect(document.pictures(0).captions_size() == 1, "caption reference");
   }
+  expect(!lighton::parse_lightonocr_markdown(
+      "![text](" + std::string(200000, '9') + ",0,1000,1000) text",
+      1, 1000, 1000, &document, &error), "long coordinate rejected safely");
+  expect(lighton::parse_lightonocr_markdown(
+      "![" + std::string(200000, 'a') + " malformed marker",
+      1, 1000, 1000, &document, &error), "malformed marker remains text");
+  expect(!lighton::parse_lightonocr_markdown(std::string(1024 * 1024 + 1, 'x'),
+      1, 1000, 1000, &document, &error), "output byte cap enforced");
   if (failures != 0) return 1;
   std::cout << "markdown_test ok\n";
   return 0;

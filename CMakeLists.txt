@@ -74,7 +74,7 @@ target_link_libraries(lighton_proto PUBLIC grpc++)
 
 add_library(lighton_parse STATIC src/parse/markdown.cpp)
 target_include_directories(lighton_parse PUBLIC src)
-target_link_libraries(lighton_parse PUBLIC lighton_proto)
+target_link_libraries(lighton_parse PUBLIC lighton_proto re2::re2)
 lighton_warnings(lighton_parse)
 
 add_library(lighton_service STATIC

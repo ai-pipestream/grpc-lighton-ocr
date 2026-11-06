@@ -19,6 +19,10 @@ class LightOnOcrServiceImpl final : public locrv1::LightOnOcrService::Service {
  public:
   explicit LightOnOcrServiceImpl(Config config) : config_(std::move(config)) {}
 
+  // One readiness source for GetServiceInfo and named gRPC health.
+  // The native engine integration will replace this with its loaded state.
+  bool engine_loaded() const noexcept { return false; }
+
   grpc::Status ParseDocument(grpc::ServerContext* context,
                              grpc::ServerReaderWriter<locrv1::ParseDocumentResponse,
                                                       locrv1::ParseDocumentRequest>* stream) override;

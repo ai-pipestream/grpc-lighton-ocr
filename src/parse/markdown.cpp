@@ -1,7 +1,8 @@
 #include "parse/markdown.h"
 
 #include <cctype>
-#include <regex>
+#include <re2/re2.h>
+#include <string_view>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -31,10 +32,10 @@ bool furniture_label(const std::string& label) {
 }
 
 std::string strip_preamble(std::string content) {
-  static const std::regex think(R"(^\s*(?:<think>[\s\S]*?)?</think>\s*)");
-  static const std::regex partial(R"(!\[[A-Za-z_][\w-]*\+?\]\(\s*[\d,\s]*$)");
-  content = std::regex_replace(content, think, "");
-  content = std::regex_replace(content, partial, "");
+  static const RE2 think(R"(^\s*(?:<think>[\s\S]*?)?</think>\s*)");
+  static const RE2 partial(R"(!\[[A-Za-z_][\w-]*\+?\]\(\s*[\d,\s]*$)");
+  RE2::Replace(&content, think, "");
+  RE2::Replace(&content, partial, "");
   return content;
 }
 
@@ -52,7 +53,7 @@ bool fence_delimiter(const std::string& line, std::string* delimiter) {
 }
 
 std::vector<Block> split_blocks(const std::string& content) {
-  static const std::regex marker(
+  static const RE2 marker(
       R"(!\[([A-Za-z_][\w-]*)\+?\]\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)[ \t]*)");
   std::vector<Block> blocks;
   Block current;
@@ -67,20 +68,25 @@ std::vector<Block> split_blocks(const std::string& content) {
     const std::string kept_newline = line_end < text.size() ? "\n" : "";
     std::string rest = line;
     if (fence.empty()) {
-      std::smatch match;
-      while (std::regex_search(rest, match, marker)) {
-        current.text.append(match.prefix().str());
+      re2::StringPiece remaining(rest);
+      re2::StringPiece label, x0, y0, x1, y1;
+      while (RE2::FindAndConsume(&remaining, marker, &label, &x0, &y0, &x1, &y1)) {
+        // The label starts two bytes after ![. RE2 has bounded stack usage
+        // even for malformed markers and arbitrarily long coordinate digits.
+        const size_t prefix = static_cast<size_t>(label.data() - rest.data()) - 2;
+        current.text.append(rest, 0, prefix);
         if (!current.text.empty() || current.has_box || blocks.empty()) {
           blocks.push_back(current);
         }
         current = Block{};
-        current.label = match[1].str();
-        current.x0 = std::stoi(match[2].str());
-        current.y0 = std::stoi(match[3].str());
-        current.x1 = std::stoi(match[4].str());
-        current.y1 = std::stoi(match[5].str());
+        current.label = std::string(label);
+        current.x0 = std::stoi(std::string(x0));
+        current.y0 = std::stoi(std::string(y0));
+        current.x1 = std::stoi(std::string(x1));
+        current.y1 = std::stoi(std::string(y1));
         current.has_box = true;
-        rest = match.suffix().str();
+        rest = std::string(remaining);
+        remaining = rest;
       }
     }
     std::string delimiter;
@@ -219,6 +225,11 @@ docv1::DocItemLabel label_of(const std::string& label) {
 bool parse_lightonocr_markdown(const std::string& content, uint32_t page_no, uint32_t width_px,
                                uint32_t height_px, docv1::Document* out, std::string* error) {
   if (out == nullptr || error == nullptr) return false;
+  // Reject before copies, regex processing, or protobuf allocation.
+  if (content.size() > 1024 * 1024) {
+    *error = "lightonocr reply exceeds the 1 MiB output cap";
+    return false;
+  }
   const std::string body = strip_preamble(content);
   if (trim_copy(body).empty()) {
     *error = "empty lightonocr reply";
