@@ -38,6 +38,37 @@ FetchContent_Declare(grpc
   SYSTEM)
 FetchContent_MakeAvailable(grpc)
 
+# CPU-only, in-process backend. No downloads or subprocesses during inference.
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(GGML_CUDA OFF CACHE BOOL "" FORCE)
+set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
+set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
+set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
+# Keep upstream architecture-specific SIMD defaults. GGML_NATIVE stays OFF:
+# x86 uses the fixed AVX2 baseline, while ARM selects its own kernels and flags.
+# No host-specific AVX512/AMX flags or dynamic backend plugins are enabled.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
+  set(LIGHTON_X86_SIMD ON)
+else()
+  set(LIGHTON_X86_SIMD OFF)
+endif()
+foreach(instruction AVX AVX2 FMA F16C SSE42)
+  set(GGML_${instruction} ${LIGHTON_X86_SIMD} CACHE BOOL "" FORCE)
+endforeach()
+set(LLAMA_BUILD_COMMON OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_MTMD ON CACHE BOOL "" FORCE)
+set(LLAMA_OPENSSL OFF CACHE BOOL "" FORCE)
+set(LLAMA_SUBPROCESS OFF CACHE BOOL "" FORCE)
+set(MTMD_VIDEO OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(llama
+  GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git
+  GIT_TAG f3586e66bc916d672773d4a6505513ba91a3595c
+  SYSTEM)
+FetchContent_MakeAvailable(llama)
+
 set(LIGHTON_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(LIGHTON_PROTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/proto")
 set(LIGHTON_PROTOS
@@ -74,14 +105,16 @@ target_link_libraries(lighton_proto PUBLIC grpc++)
 
 add_library(lighton_parse STATIC src/parse/markdown.cpp)
 target_include_directories(lighton_parse PUBLIC src)
-target_link_libraries(lighton_parse PUBLIC lighton_proto)
+target_link_libraries(lighton_parse PUBLIC lighton_proto re2::re2)
 lighton_warnings(lighton_parse)
 
 add_library(lighton_service STATIC
+  src/engine/native_engine.cpp
   src/config.cpp
   src/service/lighton_service.cpp)
 target_include_directories(lighton_service PUBLIC src)
-target_link_libraries(lighton_service PUBLIC lighton_parse)
+target_include_directories(lighton_service SYSTEM PRIVATE "${llama_SOURCE_DIR}/vendor/stb")
+target_link_libraries(lighton_service PUBLIC lighton_parse llama mtmd)
 lighton_warnings(lighton_service)
 
 add_executable(grpc-lighton-ocr-server src/main.cpp)
@@ -98,4 +131,15 @@ if(BUILD_TESTING)
   target_link_libraries(service_test PRIVATE lighton_service)
   lighton_warnings(service_test)
   add_test(NAME service_test COMMAND service_test)
+endif()
+
+# Explicit qualification gate: supplied models are required, never skipped.
+set(LIGHTON_QUALIFICATION_MODELS "" CACHE PATH "Pinned artifacts for real native RPC tests")
+if(BUILD_TESTING AND LIGHTON_QUALIFICATION_MODELS)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  find_program(LIGHTON_GRPCURL grpcurl REQUIRED)
+  add_test(NAME native_rpc_test COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/native_rpc_test.py
+    $<TARGET_FILE:grpc-lighton-ocr-server> ${LIGHTON_QUALIFICATION_MODELS})
+  set_tests_properties(native_rpc_test PROPERTIES TIMEOUT 600)
 endif()

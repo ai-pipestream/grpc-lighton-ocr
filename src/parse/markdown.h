@@ -15,6 +15,7 @@ namespace docv1 = ai::pipestream::document::v1;
 // stays on that grid when they are zero. An empty reply is an error.
 bool parse_lightonocr_markdown(const std::string& content, uint32_t page_no,
                                uint32_t width_px, uint32_t height_px,
-                               docv1::Document* out, std::string* error);
+                               docv1::Document* out, std::string* error,
+                               const docv1::CollectorSource* source = nullptr);
 
 }  // namespace lighton

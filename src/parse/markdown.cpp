@@ -1,13 +1,42 @@
 #include "parse/markdown.h"
 
 #include <cctype>
-#include <regex>
+#include <re2/re2.h>
+#include <string_view>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace lighton {
 namespace {
+
+// Validate UTF-8 and count Unicode scalar values, not bytes or graphemes.
+bool codepoints(const std::string& text, int32_t* count) {
+  *count = 0;
+  for (size_t i = 0; i < text.size();) {
+    const auto lead = static_cast<unsigned char>(text[i++]);
+    uint32_t value = lead;
+    unsigned continuation = 0;
+    if (lead < 0x80) {}
+    else if (lead >= 0xc2 && lead <= 0xdf) { continuation = 1; value &= 0x1f; }
+    else if (lead >= 0xe0 && lead <= 0xef) { continuation = 2; value &= 0x0f; }
+    else if (lead >= 0xf0 && lead <= 0xf4) { continuation = 3; value &= 0x07; }
+    else return false;
+    const unsigned length = continuation;
+    if (i + continuation > text.size()) return false;
+    while (continuation--) {
+      const auto next = static_cast<unsigned char>(text[i++]);
+      if ((next & 0xc0) != 0x80) return false;
+      value = (value << 6) | (next & 0x3f);
+    }
+    if ((length == 1 && value < 0x80) || (length == 2 && value < 0x800) ||
+        (length == 3 && value < 0x10000) || value > 0x10ffff ||
+        (value >= 0xd800 && value <= 0xdfff)) return false;
+    ++*count;
+  }
+  return true;
+}
 
 struct Block {
   std::string label;
@@ -30,10 +59,10 @@ bool furniture_label(const std::string& label) {
 }
 
 std::string strip_preamble(std::string content) {
-  static const std::regex think(R"(^\s*(?:<think>[\s\S]*?)?</think>\s*)");
-  static const std::regex partial(R"(!\[[A-Za-z_][\w-]*\+?\]\(\s*[\d,\s]*$)");
-  content = std::regex_replace(content, think, "");
-  content = std::regex_replace(content, partial, "");
+  static const RE2 think(R"(^\s*(?:<think>[\s\S]*?)?</think>\s*)");
+  static const RE2 partial(R"(!\[[A-Za-z_][\w-]*\+?\]\(\s*[\d,\s]*$)");
+  RE2::Replace(&content, think, "");
+  RE2::Replace(&content, partial, "");
   return content;
 }
 
@@ -51,7 +80,7 @@ bool fence_delimiter(const std::string& line, std::string* delimiter) {
 }
 
 std::vector<Block> split_blocks(const std::string& content) {
-  static const std::regex marker(
+  static const RE2 marker(
       R"(!\[([A-Za-z_][\w-]*)\+?\]\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)[ \t]*)");
   std::vector<Block> blocks;
   Block current;
@@ -66,20 +95,25 @@ std::vector<Block> split_blocks(const std::string& content) {
     const std::string kept_newline = line_end < text.size() ? "\n" : "";
     std::string rest = line;
     if (fence.empty()) {
-      std::smatch match;
-      while (std::regex_search(rest, match, marker)) {
-        current.text.append(match.prefix().str());
+      re2::StringPiece remaining(rest);
+      re2::StringPiece label, x0, y0, x1, y1;
+      while (RE2::FindAndConsume(&remaining, marker, &label, &x0, &y0, &x1, &y1)) {
+        // The label starts two bytes after ![. RE2 has bounded stack usage
+        // even for malformed markers and arbitrarily long coordinate digits.
+        const size_t prefix = static_cast<size_t>(label.data() - rest.data()) - 2;
+        current.text.append(rest, 0, prefix);
         if (!current.text.empty() || current.has_box || blocks.empty()) {
           blocks.push_back(current);
         }
         current = Block{};
-        current.label = match[1].str();
-        current.x0 = std::stoi(match[2].str());
-        current.y0 = std::stoi(match[3].str());
-        current.x1 = std::stoi(match[4].str());
-        current.y1 = std::stoi(match[5].str());
+        current.label = std::string(label);
+        current.x0 = std::stoi(std::string(x0));
+        current.y0 = std::stoi(std::string(y0));
+        current.x1 = std::stoi(std::string(x1));
+        current.y1 = std::stoi(std::string(y1));
         current.has_box = true;
-        rest = match.suffix().str();
+        rest = std::string(remaining);
+        remaining = rest;
       }
     }
     std::string delimiter;
@@ -115,14 +149,11 @@ int heading_level(const std::string& text) {
   return 0;
 }
 
-std::string trim_copy(std::string text) {
-  while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front())) != 0) {
-    text.erase(text.begin());
-  }
-  while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())) != 0) {
-    text.pop_back();
-  }
-  return text;
+std::string trim_copy(const std::string& text) {
+  size_t first = 0, last = text.size();
+  while (first < last && std::isspace(static_cast<unsigned char>(text[first]))) ++first;
+  while (last > first && std::isspace(static_cast<unsigned char>(text[last - 1]))) --last;
+  return text.substr(first, last - first);
 }
 
 void set_box(docv1::ProvenanceItem* prov, const Block& block, uint32_t width, uint32_t height) {
@@ -168,6 +199,10 @@ docv1::TextItemBase* add_text(docv1::Document* document, const Block& block, uin
   base->set_orig(text);
   docv1::ProvenanceItem* prov = base->add_prov();
   prov->set_page_no(static_cast<int32_t>(page_no));
+  int32_t length = 0;
+  codepoints(text, &length);
+  prov->mutable_charspan()->set_start(0);
+  prov->mutable_charspan()->set_end(length);
   set_box(prov, block, width, height);
   parent->add_children()->set_ref(ref);
   return base;
@@ -188,6 +223,16 @@ void add_picture(docv1::Document* document, const Block& block, uint32_t page_no
   prov->set_page_no(static_cast<int32_t>(page_no));
   set_box(prov, block, width, height);
   parent->add_children()->set_ref(ref);
+  if (!trim_copy(block.text).empty()) {
+    auto* caption = add_text(document, block, page_no, width, height,
+                             docv1::DOC_ITEM_LABEL_CAPTION, 0);
+    // Descriptions and chart markup belong to the picture. Preserve the
+    // text even before typed chart/table extraction is implemented.
+    parent->mutable_children()->RemoveLast();
+    caption->mutable_parent()->set_ref(ref);
+    picture->add_children()->set_ref(caption->self_ref());
+    picture->add_captions()->set_ref(caption->self_ref());
+  }
 }
 
 docv1::DocItemLabel label_of(const std::string& label) {
@@ -206,8 +251,16 @@ docv1::DocItemLabel label_of(const std::string& label) {
 }  // namespace
 
 bool parse_lightonocr_markdown(const std::string& content, uint32_t page_no, uint32_t width_px,
-                               uint32_t height_px, docv1::Document* out, std::string* error) {
+                               uint32_t height_px, docv1::Document* out, std::string* error,
+                               const docv1::CollectorSource* source) {
   if (out == nullptr || error == nullptr) return false;
+  // Reject before copies, regex processing, or protobuf allocation.
+  if (content.size() > 1024 * 1024) {
+    *error = "lightonocr reply exceeds the 1 MiB output cap";
+    return false;
+  }
+  int32_t length = 0;
+  if (!codepoints(content, &length)) { *error = "invalid UTF-8 model output"; return false; }
   const std::string body = strip_preamble(content);
   if (trim_copy(body).empty()) {
     *error = "empty lightonocr reply";
@@ -227,7 +280,15 @@ bool parse_lightonocr_markdown(const std::string& content, uint32_t page_no, uin
     page.mutable_size()->set_width(width_px);
     page.mutable_size()->set_height(height_px);
   }
-  for (const Block& block : split_blocks(body)) {
+  std::vector<Block> blocks;
+  try {
+    blocks = split_blocks(body);
+  } catch (const std::out_of_range&) {
+    out->Clear();
+    *error = "grounding coordinate exceeds the integer range";
+    return false;
+  }
+  for (const Block& block : blocks) {
     const std::string text = trim_copy(block.text);
     if (text.empty() && !picture_label(block.label)) continue;
     if (picture_label(block.label)) {
@@ -238,6 +299,18 @@ bool parse_lightonocr_markdown(const std::string& content, uint32_t page_no, uin
     docv1::DocItemLabel label = label_of(block.label);
     if (hashes >= 2) label = docv1::DOC_ITEM_LABEL_SECTION_HEADER;
     add_text(out, block, page_no, width_px, height_px, label, hashes);
+  }
+  if (source) {
+    for (auto& item : *out->mutable_texts()) {
+      docv1::TextItemBase* base = nullptr;
+      if (item.has_title()) base = item.mutable_title()->mutable_base();
+      else if (item.has_section_header()) base = item.mutable_section_header()->mutable_base();
+      else if (item.has_formula()) base = item.mutable_formula()->mutable_base();
+      else base = item.mutable_text()->mutable_base();
+      base->add_source()->mutable_collector()->CopyFrom(*source);
+    }
+    for (auto& picture : *out->mutable_pictures())
+      picture.add_source()->mutable_collector()->CopyFrom(*source);
   }
   return true;
 }

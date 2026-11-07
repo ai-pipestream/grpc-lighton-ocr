@@ -28,6 +28,9 @@ Config load_config_from_env() {
   config.listen_address = env_or("GRPC_LIGHTON_LISTEN_ADDRESS", config.listen_address);
   config.models_dir = env_or("GRPC_LIGHTON_MODELS_DIR", config.models_dir);
   config.model = parse_model(env_or("GRPC_LIGHTON_MODEL", "0.8b"));
+  const auto diagnostic = env_or("GRPC_LIGHTON_DIAGNOSTIC_NO_ENGINE", "0");
+  if (diagnostic != "0" && diagnostic != "1") throw std::invalid_argument("diagnostic mode must be 0 or 1");
+  config.diagnostic_no_engine = diagnostic == "1";
   return config;
 }
 

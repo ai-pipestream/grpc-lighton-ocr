@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Boot-proofs a grpc-lighton-ocr image. The native engine is not linked, so
-# the image boots with no weights: the server must come up, bind its
+# Boot-proofs transport in explicit diagnostic mode (no inference claim): the server must come up, bind its
 # listener, log its "listening on" line, and shut down cleanly on SIGTERM.
 set -euo pipefail
 
@@ -41,7 +40,7 @@ fi
 
 echo "== smoke: server boots and reaches its listener"
 container="lighton-ocr-smoke-$$"
-docker run -d --read-only --name "$container" "$image" >/dev/null
+docker run -d --read-only -e GRPC_LIGHTON_DIAGNOSTIC_NO_ENGINE=1 --name "$container" "$image" >/dev/null
 trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
 for _ in $(seq 1 60); do
   docker logs "$container" 2>&1 | grep -q "listening on" && break
