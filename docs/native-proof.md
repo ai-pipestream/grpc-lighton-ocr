@@ -69,3 +69,49 @@ The Dockerfile runs markdown_test and service_test. The service test checks
 that malformed grounding retains raw text and token traces. CI smoke checks
 transport boot only. Hosted checks and publication are separate gates.
 The runtime includes project and pinned llama.cpp licenses.
+
+## Committed-source Dockerfile qualification (2026-11-06)
+
+Source commit: `41041d99097c02e0c4ba0024a96498005766148b`.
+A clean worktree at this commit produced a new repository Dockerfile image.
+The dependency cache was reused; first-party files were recompiled, including
+`src/engine/native_engine.cpp` (build log step 10/22). The image revision label
+matches this commit. This receipt adds documentation only after that run.
+
+Image ID:
+`sha256:38d20ae2fef298a19a33e1933645e3d6d6ec8b2a7fe39a90a942ca911a2175fb`
+
+Server binary SHA256:
+`f7862c4d4b035975249c7c0eaa752055dfaaa8f079f4b337df7c725354fbb2df`
+
+Commands, from the source worktree:
+
+```sh
+docker build --label org.opencontainers.image.revision=41041d99097c02e0c4ba0024a96498005766148b -t grpc-lighton-ocr:41041d9 .
+./scripts/smoke-test.sh grpc-lighton-ocr:41041d9
+./scripts/test-native-image.sh grpc-lighton-ocr:41041d9 /work/models/lightonocr3-0.8b-native
+docker run --rm --read-only --entrypoint /usr/bin/sha256sum grpc-lighton-ocr:41041d9 /usr/local/bin/grpc-lighton-ocr-server
+```
+
+Results: Dockerfile CTest 2/2 passed; diagnostic image smoke passed; read-only
+real-model RPC qualification passed. Checks covered invoice text, positive
+page boxes, source metadata, Unicode spans, raw traces, two-page references,
+partial output, greedy decoding, admission limits, cancellation and recovery.
+Eight-page active-call shutdown exited 0 in 5.370 seconds; the client received
+Unavailable with "Cancelling all calls". Root and model mounts were read-only.
+The runtime license files match the project and pinned backend licenses.
+
+The service unit test also passed four idle clients without client deadlines:
+server timeout returned CANCELLED and released capacity for another request.
+That test uses 150 milliseconds; production uses 30 seconds per blocked Read
+or Write, with no transport timer during inference. Write backpressure does
+not have a separate client-visible regression receipt.
+
+Logs on krick:
+
+- `/tmp/lighton-41041d9-docker-build.log`
+- `/tmp/lighton-41041d9-smoke.log`
+- `/tmp/lighton-41041d9-rpc.log`
+
+Hosted CI and publication are separate from this local qualification. No 4B,
+aarch64, GPU, general document accuracy, or published-image result is claimed.
