@@ -1,76 +1,98 @@
 # grpc-lighton-ocr
 
-A gRPC collector for LightOnOCR-3. It speaks a typed streaming contract and
-ships as its own container so it can scale apart from gRParse and from
-`grpc-unlimited-ocr`.
+A diskless streaming gRPC OCR service using native libllama/libmtmd and the
+LightOnOCR-3-0.8B checkpoint on CPU. Request images stay in RAM; inference uses
+no Python, subprocess, HTTP model server, or writable request directory.
 
-**Status:** the wire contract, the grounding-markdown parser, the hardened
-image, and CI are in place. The native weight engine is not linked yet.
-`GetServiceInfo` reports `engine_loaded = false`, and a page raster returns
-`PAGE_FAILURE_CODE_ENGINE_UNAVAILABLE`. The parser is what will turn a
-decode into `Document` items. Current tests exercise the parser and failure
-paths, not image-to-text inference. Table markup is still retained as text;
-typed table extraction and continuation-block joining are unfinished.
+Only **CPU 0.8B** is enabled. The 4B enum remains on the wire but production
+startup rejects it. Table markup is retained as text; typed table extraction
+and continuation-block joining are unfinished. gRParse does not dial this
+service yet. Setting `GRPARSE_LIGHTON_OCR_TARGET` does not enable a route.
 
-The service is `ai.pipestream.lightonocr.v1.LightOnOcrService` on port
-**50074**. The gRParse coordinator does not dial this service yet; setting
-`GRPARSE_LIGHTON_OCR_TARGET` does not enable a parse route. The proposed
-compose integration is an opt-in service shell, not an OCR implementation.
+## Build and models
 
-The standard gRPC health RPC indicates transport availability only. Use
-`GetServiceInfo.engine_loaded` to check inference readiness, and inspect
-page failures and completion counts even when the stream status is OK.
-The process holds request bytes in memory and needs no writable request
-directory. Model files are separate from request data.
-
-## Build and test
-
-Requires CMake 3.25 or newer and a C++23 compiler.
+Requires CMake 3.25+, a C++23 compiler, and Git. gRPC is pinned to v1.83.0;
+llama.cpp is pinned to `f3586e66bc916d672773d4a6505513ba91a3595c`.
+The CPU backend is static, without native CPU tuning, dynamic backend plugins,
+video subprocess helpers, or HTTP inference support. The x86 build uses the
+upstream fixed AVX2 baseline; ARM uses its own architecture-specific kernels.
+ARM inference qualification is not claimed by the x86 fixture receipt.
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DLIGHTON_WERROR=ON
-cmake --build build
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel 2
 ctest --test-dir build --output-on-failure
 ```
 
-gRPC is fetched at configure time (v1.83.0).
+Weights remain external. `models/source-manifest.json` records the upstream
+Apache-2.0 checkpoint revision and every source file hash. `models/SHA256SUMS`
+records the converted BF16 text and vision artifacts. Startup verifies both
+hashes, loads both artifacts, then opens the listener. Missing, mismatched, or
+unloadable production artifacts fail startup.
 
-## Image
+For offline preparation, use a Python environment with CPU Torch 2.11.0 and
+Transformers 5.5.4 and the pinned llama.cpp checkout:
 
-The runtime is numeric user 65532, one binary, gRPC only. Run it read-only.
-Weights, when the engine loads them, mount at `/models` and are never baked
-into the image.
+```sh
+python tools/prepare_model.py /path/to/pinned/llama.cpp /path/to/models
+```
+
+Python is only used for offline conversion and test clients. The service never
+runs the preparation script. Mount the resulting directory read-only:
 
 ```sh
 docker build -t grpc-lighton-ocr:local .
-docker run --rm --read-only -p 50074:50074 grpc-lighton-ocr:local
+docker run --rm --read-only --cap-drop ALL -p 50074:50074 \
+  -v /absolute/path/to/models:/models:ro grpc-lighton-ocr:local
 ```
 
-`scripts/smoke-test.sh` checks library closure, the user, the exposed port,
-the listen line, and a clean SIGTERM.
+## Readiness and limits
 
-## Contract
+The service name is `ai.pipestream.lightonocr.v1.LightOnOcrService`.
+Check that name with gRPC Health/Check for inference readiness. The empty
+service name is transport liveness. `GetServiceInfo.engine_loaded` agrees
+with named readiness. `GRPC_LIGHTON_DIAGNOSTIC_NO_ENGINE=1` explicitly boots
+without models for transport diagnostics; named health stays NOT_SERVING and
+pages fail ENGINE_UNAVAILABLE. This is not an inference mode.
 
-[`proto/ai/pipestream/lightonocr/v1/lighton_ocr.proto`](proto/ai/pipestream/lightonocr/v1/lighton_ocr.proto).
-`document.proto` and the OpenNLP protos it imports are vendored
-byte-identical from gRParse. `buf lint` and `buf format` run in CI.
+Limits are four active document streams and one active inference, with no
+inference queue; 256 pages; 32 MiB compressed raster; 4 million decoded pixels
+and at most 8192 per dimension; 4096 context tokens; 2048 vision tokens;
+1024 generated tokens maximum (512 default); 1 MiB generated text; 16 MiB
+folded document. PNG/JPEG dimensions are checked before raster allocation.
+Zero temperature (including omitted) selects greedy decoding; positive
+temperatures must be finite and within 0.01..2.
+Sampling uses seed zero. A decode has a 60-second deadline and checks client
+cancellation in vision graph evaluation and decoder operations. Shutdown
+marks health non-serving and gives active RPCs five seconds before cancellation.
 
-## Licence
+Partial or malformed output remains in the typed failure generation trace, with a
+finish reason and recoverable partial document where available.
 
-Apache-2.0.
+Successful pages carry typed artifact hashes, revisions, device and service
+version, plus page boxes and a token generation trace. Failures remain typed;
+clients must inspect page failures and completion counts even with OK status.
 
-## Native engine work remaining
+## Qualification
 
-The declared 0.8B and 4B checkpoints use Qwen3.5, per the
-[upstream model card](https://huggingface.co/lightonai/LightOnOCR-3-0.8B).
-A candidate C++ integration is libllama plus libmtmd, with an image decoded
-from its input buffer, a bounded decode loop, and cancellation checked
-between decode steps. This is a proposed path, not implemented support.
-No checkpoint or projector checksums are pinned in `models/MANIFEST` yet.
+Model-free unit tests use diagnostic mode. They do not prove OCR.
+The real-model regression requires grpcurl, Python, and the pinned artifacts:
 
-Before advertising either checkpoint as working, pin the native library and
-converted model/projector artifacts, verify preprocessing and the grounding
-prompt against upstream, and run an actual image-to-text fixture through the
-read-only service container. Record the model revision and output, test
-resource limits and cancellation, then add the gRParse client route. The
-existing parser and stub tests do not satisfy that gate.
+```sh
+python3 tests/native_rpc_test.py build/grpc-lighton-ocr-server /path/to/models
+scripts/test-native-image.sh grpc-lighton-ocr:local /path/to/models
+```
+
+It checks expected invoice text, valid positive page boxes (not exact generated
+coordinates), provenance, generation traces, two-page folded references,
+resource limits, concurrent admission, loaded health, cancellation and recovery.
+The image test uses a read-only root and read-only model mount. Missing weights
+are failures, not skipped tests. `scripts/smoke-test.sh` checks only diagnostic
+transport boot, library closure and shutdown. See `docs/native-proof.md` for
+the original standalone checkpoint proof, which is separate from RPC/image proof.
+
+## Contract and licence
+
+The contract is `proto/ai/pipestream/lightonocr/v1/lighton_ocr.proto`.
+The shared document and OpenNLP protos remain byte-identical to the fleet copy.
+`buf lint` and `buf format` run in CI. Apache-2.0.

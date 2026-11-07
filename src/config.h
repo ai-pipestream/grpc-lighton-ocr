@@ -14,6 +14,7 @@ struct Config {
   // fails startup.
   ai::pipestream::lightonocr::v1::LightonModel model =
       ai::pipestream::lightonocr::v1::LIGHTON_MODEL_0_8B;
+  bool diagnostic_no_engine = false;
   uint32_t max_pages = 256;
   uint64_t max_page_bytes = 32ull * 1024ull * 1024ull;
 };

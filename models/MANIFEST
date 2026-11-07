@@ -1,8 +1,8 @@
-# Weights stay out of the image. Mount them read-only at /models.
-# The native engine is not linked in this revision: GetServiceInfo
-# reports engine_loaded false, and a page raster returns
-# PAGE_FAILURE_CODE_ENGINE_UNAVAILABLE.
-#
-# Checkpoints the engine will load, once it lands:
-#   lightonai/LightOnOCR-3-0.8B
-#   lightonai/LightOnOCR-3-4B
+# External, read-only GGUF artifacts. Never bake weights into the service image.
+model lightonai/LightOnOCR-3-0.8B
+revision 36d8636925327c671bd8e479c517a004f7566bd9
+license Apache-2.0
+backend llama.cpp f3586e66bc916d672773d4a6505513ba91a3595c
+# Source files: source-manifest.json. Converted artifacts: SHA256SUMS.
+# Only CPU 0.8B is qualified. The 4B enum is retained for wire compatibility,
+# but production startup rejects it. No implicit or remote model downloads.

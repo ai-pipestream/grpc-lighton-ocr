@@ -62,7 +62,9 @@ int main() {
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     grpc::ServerBuilder builder;
     builder.AddListeningPort(config.listen_address, grpc::InsecureServerCredentials());
-    builder.SetMaxReceiveMessageSize(64 * 1024 * 1024);
+    grpc::ResourceQuota quota; quota.Resize(128 * 1024 * 1024);
+    builder.SetResourceQuota(quota);
+    builder.SetMaxReceiveMessageSize(33 * 1024 * 1024);
     builder.RegisterService(&service);
     std::unique_ptr<grpc::Server> server = builder.BuildAndStart();
     if (server == nullptr) {

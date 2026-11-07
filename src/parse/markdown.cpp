@@ -11,6 +11,33 @@
 namespace lighton {
 namespace {
 
+// Validate UTF-8 and count Unicode scalar values, not bytes or graphemes.
+bool codepoints(const std::string& text, int32_t* count) {
+  *count = 0;
+  for (size_t i = 0; i < text.size();) {
+    const auto lead = static_cast<unsigned char>(text[i++]);
+    uint32_t value = lead;
+    unsigned continuation = 0;
+    if (lead < 0x80) {}
+    else if (lead >= 0xc2 && lead <= 0xdf) { continuation = 1; value &= 0x1f; }
+    else if (lead >= 0xe0 && lead <= 0xef) { continuation = 2; value &= 0x0f; }
+    else if (lead >= 0xf0 && lead <= 0xf4) { continuation = 3; value &= 0x07; }
+    else return false;
+    const unsigned length = continuation;
+    if (i + continuation > text.size()) return false;
+    while (continuation--) {
+      const auto next = static_cast<unsigned char>(text[i++]);
+      if ((next & 0xc0) != 0x80) return false;
+      value = (value << 6) | (next & 0x3f);
+    }
+    if ((length == 1 && value < 0x80) || (length == 2 && value < 0x800) ||
+        (length == 3 && value < 0x10000) || value > 0x10ffff ||
+        (value >= 0xd800 && value <= 0xdfff)) return false;
+    ++*count;
+  }
+  return true;
+}
+
 struct Block {
   std::string label;
   std::string text;
@@ -122,14 +149,11 @@ int heading_level(const std::string& text) {
   return 0;
 }
 
-std::string trim_copy(std::string text) {
-  while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front())) != 0) {
-    text.erase(text.begin());
-  }
-  while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())) != 0) {
-    text.pop_back();
-  }
-  return text;
+std::string trim_copy(const std::string& text) {
+  size_t first = 0, last = text.size();
+  while (first < last && std::isspace(static_cast<unsigned char>(text[first]))) ++first;
+  while (last > first && std::isspace(static_cast<unsigned char>(text[last - 1]))) --last;
+  return text.substr(first, last - first);
 }
 
 void set_box(docv1::ProvenanceItem* prov, const Block& block, uint32_t width, uint32_t height) {
@@ -175,6 +199,10 @@ docv1::TextItemBase* add_text(docv1::Document* document, const Block& block, uin
   base->set_orig(text);
   docv1::ProvenanceItem* prov = base->add_prov();
   prov->set_page_no(static_cast<int32_t>(page_no));
+  int32_t length = 0;
+  codepoints(text, &length);
+  prov->mutable_charspan()->set_start(0);
+  prov->mutable_charspan()->set_end(length);
   set_box(prov, block, width, height);
   parent->add_children()->set_ref(ref);
   return base;
@@ -223,13 +251,16 @@ docv1::DocItemLabel label_of(const std::string& label) {
 }  // namespace
 
 bool parse_lightonocr_markdown(const std::string& content, uint32_t page_no, uint32_t width_px,
-                               uint32_t height_px, docv1::Document* out, std::string* error) {
+                               uint32_t height_px, docv1::Document* out, std::string* error,
+                               const docv1::CollectorSource* source) {
   if (out == nullptr || error == nullptr) return false;
   // Reject before copies, regex processing, or protobuf allocation.
   if (content.size() > 1024 * 1024) {
     *error = "lightonocr reply exceeds the 1 MiB output cap";
     return false;
   }
+  int32_t length = 0;
+  if (!codepoints(content, &length)) { *error = "invalid UTF-8 model output"; return false; }
   const std::string body = strip_preamble(content);
   if (trim_copy(body).empty()) {
     *error = "empty lightonocr reply";
@@ -268,6 +299,18 @@ bool parse_lightonocr_markdown(const std::string& content, uint32_t page_no, uin
     docv1::DocItemLabel label = label_of(block.label);
     if (hashes >= 2) label = docv1::DOC_ITEM_LABEL_SECTION_HEADER;
     add_text(out, block, page_no, width_px, height_px, label, hashes);
+  }
+  if (source) {
+    for (auto& item : *out->mutable_texts()) {
+      docv1::TextItemBase* base = nullptr;
+      if (item.has_title()) base = item.mutable_title()->mutable_base();
+      else if (item.has_section_header()) base = item.mutable_section_header()->mutable_base();
+      else if (item.has_formula()) base = item.mutable_formula()->mutable_base();
+      else base = item.mutable_text()->mutable_base();
+      base->add_source()->mutable_collector()->CopyFrom(*source);
+    }
+    for (auto& picture : *out->mutable_pictures())
+      picture.add_source()->mutable_collector()->CopyFrom(*source);
   }
   return true;
 }

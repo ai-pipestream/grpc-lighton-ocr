@@ -64,6 +64,23 @@ int main() {
       1, 1000, 1000, &document, &error), "malformed marker remains text");
   expect(!lighton::parse_lightonocr_markdown(std::string(1024 * 1024 + 1, 'x'),
       1, 1000, 1000, &document, &error), "output byte cap enforced");
+  lighton::docv1::CollectorSource source;
+  source.set_collector("grpc-lighton-ocr"); source.set_model("test-model"); source.set_version("revision");
+  expect(lighton::parse_lightonocr_markdown(
+      "![text](0,0,1000,400) café 東京 😀\n![image](0,500,1000,1000) 船é😀",
+      1, 1000, 1000, &document, &error, &source), error);
+  expect(document.texts_size() == 2, "Unicode text and caption retained");
+  if (document.texts_size() == 2) {
+    expect(document.texts(0).text().base().prov(0).charspan().end() == 9, "text span uses code points");
+    expect(document.texts(1).text().base().prov(0).charspan().end() == 3, "caption span uses code points");
+    for (const auto& item : document.texts())
+      expect(item.text().base().source(0).collector().SerializeAsString() == source.SerializeAsString(),
+             "per-text collector model revision");
+    expect(document.pictures(0).source(0).collector().SerializeAsString() == source.SerializeAsString(),
+           "per-picture collector model revision");
+  }
+  expect(!lighton::parse_lightonocr_markdown(std::string("\xc0\xaf", 2),
+      1, 1000, 1000, &document, &error), "invalid UTF-8 rejected");
   if (failures != 0) return 1;
   std::cout << "markdown_test ok\n";
   return 0;

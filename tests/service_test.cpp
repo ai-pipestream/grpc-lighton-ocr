@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <grpcpp/grpcpp.h>
 
@@ -31,6 +32,7 @@ struct Server {
 
 Server start(lighton::Config config = {}) {
   Server started;
+  config.diagnostic_no_engine = true;
   config.listen_address = "127.0.0.1:0";
   started.service = std::make_unique<lighton::LightOnOcrServiceImpl>(config);
   grpc::ServerBuilder builder;
@@ -45,6 +47,40 @@ Server start(lighton::Config config = {}) {
 }  // namespace
 
 int main() {
+  for (bool four_b : {false, true}) {
+    lighton::Config unavailable;
+    unavailable.models_dir = "/nonexistent-lighton-models";
+    if (four_b) unavailable.model = locrv1::LIGHTON_MODEL_4B;
+    bool rejected = false;
+    try { lighton::LightOnOcrServiceImpl invalid(unavailable); }
+    catch (const std::exception&) { rejected = true; }
+    expect(rejected, "production missing weights and unqualified 4B fail startup");
+  }
+  {
+    lighton::NativeResult malformed;
+    malformed.width = 1000; malformed.height = 300;
+    malformed.text = "![text](99999999999999999,0,1000,1000) café";
+    malformed.raw_text = malformed.text + "<|im_end|>";
+    malformed.steps.push_back({7, 7, "café", -0.5f, -0.5f});
+    locrv1::ParseDocumentResponse response;
+    lighton::project_native_result(malformed, 1, locrv1::LIGHTON_MODEL_0_8B, 0, &response);
+    expect(response.has_page_failure(), "malformed grounding is typed failure");
+    expect(response.page_failure().generation_trace().text() == malformed.raw_text,
+           "malformed grounding retains all raw output");
+    expect(response.page_failure().generation_trace().steps_size() == 1,
+           "malformed grounding retains tokens");
+    malformed.text = "![text](0,0,1000,1000) café";
+    malformed.raw_text = malformed.text;
+    malformed.finish = lighton::NativeFinish::token_limit;
+    response.Clear();
+    lighton::project_native_result(malformed, 1, locrv1::LIGHTON_MODEL_0_8B, 0, &response);
+    expect(response.page_failure().finish_reason() == locrv1::FINISH_REASON_TOKEN_LIMIT,
+           "token limit has typed finish reason");
+    expect(response.page_failure().partial_document().texts_size() == 1,
+           "token limit retains recoverable document");
+    expect(response.page_failure().generation_trace().text() == malformed.raw_text,
+           "token limit retains raw output");
+  }
   Server server = start();
   expect(server.server != nullptr, "server started");
   auto channel = grpc::CreateChannel(server.address, grpc::InsecureChannelCredentials());
@@ -145,7 +181,7 @@ int main() {
     while (stream->Read(&event)) {}
     expect(!stream->Finish().ok(), "cancelled stream is not successful");
   }
-  for (int invalid_case = 0; invalid_case < 3; ++invalid_case) {
+  for (int invalid_case = 0; invalid_case < 4; ++invalid_case) {
     grpc::ClientContext context;
     auto stream = stub->ParseDocument(&context);
     locrv1::ParseDocumentRequest options;
@@ -154,6 +190,7 @@ int main() {
     if (invalid_case == 0) options.mutable_options()->set_model(static_cast<locrv1::LightonModel>(99));
     if (invalid_case == 1) options.mutable_options()->set_temperature(-1);
     if (invalid_case == 2) options.mutable_options()->set_temperature(std::numeric_limits<float>::quiet_NaN());
+    if (invalid_case == 3) options.mutable_options()->set_temperature(1e-38f);
     stream->Write(options);
     locrv1::ParseDocumentRequest page;
     page.mutable_page()->set_page_no(1);
@@ -195,6 +232,34 @@ int main() {
              "page count, byte cap, and duplicate checks");
     }
     limited.server->Shutdown();
+  }
+  {
+    using Stream = grpc::ClientReaderWriter<locrv1::ParseDocumentRequest, locrv1::ParseDocumentResponse>;
+    std::vector<std::unique_ptr<grpc::ClientContext>> contexts;
+    std::vector<std::unique_ptr<Stream>> streams;
+    for (int i = 0; i < 4; ++i) {
+      auto context = std::make_unique<grpc::ClientContext>();
+      context->set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(10));
+      auto stream = stub->ParseDocument(context.get());
+      locrv1::ParseDocumentRequest request;
+      request.mutable_options()->set_model(locrv1::LIGHTON_MODEL_0_8B);
+      request.mutable_options()->set_page_count(1); stream->Write(request);
+      request.Clear(); request.mutable_page()->set_page_no(1); stream->Write(request);
+      locrv1::ParseDocumentResponse response;
+      expect(stream->Read(&response) && response.has_page_failure(), "active stream admitted");
+      contexts.push_back(std::move(context)); streams.push_back(std::move(stream));
+    }
+    grpc::ClientContext extra;
+    extra.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(2));
+    auto rejected = stub->ParseDocument(&extra); rejected->WritesDone();
+    locrv1::ParseDocumentResponse response;
+    while (rejected->Read(&response)) {}
+    expect(rejected->Finish().error_code() == grpc::StatusCode::RESOURCE_EXHAUSTED,
+           "fifth active stream rejected");
+    for (auto& stream : streams) {
+      stream->WritesDone(); while (stream->Read(&response)) {}
+      expect(stream->Finish().ok(), "admitted stream completes");
+    }
   }
   server.server->Shutdown();
   if (failures != 0) return 1;

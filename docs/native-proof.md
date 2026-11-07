@@ -1,8 +1,8 @@
 # Native CPU checkpoint proof
 
-This is a standalone inference proof, not yet an enabled RPC engine. The service
-still reports engine_loaded=false and named health NOT_SERVING. No gRParse route
-is enabled. The 4B checkpoint has not been tested.
+Native CPU 0.8B inference now runs through the streaming RPC. Loaded health is
+SERVING; diagnostic mode reports NOT_SERVING. No gRParse route is enabled.
+The 4B checkpoint and aarch64 inference remain untested.
 
 Backend: llama.cpp f3586e66bc916d672773d4a6505513ba91a3595c, CPU only,
 libllama and libmtmd. Model: lightonai/LightOnOCR-3-0.8B revision
@@ -42,8 +42,30 @@ throughput benchmark nor proof of general OCR accuracy. Receipt files on krick:
 /tmp/lighton-native-output.txt, /tmp/lighton-native-inference.log and
 /work/models/lightonocr3-0.8b-native/source-receipt.json.
 
-Before RPC exposure: verify artifact hashes during loading; bound pixels before
-image decoding, context and generated tokens before allocation, and output bytes
-while generating; test cancellation, admission limits, actual RPC image-to-text,
-and loaded-model health. Current runtime readiness tests cover the absent engine
-only. Shutdown marks health non-serving and uses a five-second gRPC deadline.
+## RPC receipt
+
+Initial qualification used a manually assembled portable static binary and
+library closure, with the repository runtime-stage instructions. It did not
+use the full Dockerfile build. Image ID:
+`sha256:e04ea89f9865927a205b91c275515786142671c3abfbb4303b039d98f6618fdc`.
+Source was an uncommitted tree based on `508dcc8`, without an exact commit ID.
+Receipt: `/tmp/lighton-native-container-test-final.log` on krick.
+
+Passed: two-page invoice text, positive boxes, source metadata, Unicode spans,
+raw token traces, document references, token-limit partial output, greedy
+sampling, admission limits, cancellation, recovery, and active-call shutdown.
+Root and model mounts were read-only; UID was 65532. This is one fixture,
+not a general accuracy or speed measurement.
+
+Reproduction with the repository Dockerfile:
+
+```sh
+docker build -t grpc-lighton-ocr:native-review .
+./scripts/smoke-test.sh grpc-lighton-ocr:native-review
+./scripts/test-native-image.sh grpc-lighton-ocr:native-review /work/models/lightonocr3-0.8b-native
+```
+
+The Dockerfile runs markdown_test and service_test. The service test checks
+that malformed grounding retains raw text and token traces. CI smoke checks
+transport boot only. Hosted checks and publication are separate gates.
+The runtime includes project and pinned llama.cpp licenses.
