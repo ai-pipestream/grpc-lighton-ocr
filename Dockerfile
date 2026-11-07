@@ -20,7 +20,8 @@ WORKDIR /src
 COPY . .
 ARG TARGETARCH
 RUN --mount=type=cache,id=grpc-lighton-ocr-ubuntu26-cxx23-grpc1.83.0-${TARGETARCH},target=/build \
-    cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DLIGHTON_WERROR=ON \
+    find /src/src /src/tests /src/proto -type f -exec touch {} + \
+    && cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DLIGHTON_WERROR=ON \
     && cmake --build /build --target grpc-lighton-ocr-server markdown_test service_test --parallel 2 \
     && ctest --test-dir /build --output-on-failure \
     && mkdir -p /out/lib /out/licenses && cp LICENSE /out/licenses/grpc-lighton-ocr-LICENSE \
