@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <chrono>
 #include <string>
 
 #include "ai/pipestream/lightonocr/v1/lighton_ocr.pb.h"
@@ -15,6 +16,7 @@ struct Config {
   ai::pipestream::lightonocr::v1::LightonModel model =
       ai::pipestream::lightonocr::v1::LIGHTON_MODEL_0_8B;
   bool diagnostic_no_engine = false;
+  std::chrono::milliseconds transport_timeout{30000};
   uint32_t max_pages = 256;
   uint64_t max_page_bytes = 32ull * 1024ull * 1024ull;
 };

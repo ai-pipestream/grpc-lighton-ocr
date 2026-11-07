@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <unistd.h>
 #include <array>
+#include <condition_variable>
+#include <mutex>
+#include <thread>
 
 #include <cmath>
 #include <set>
@@ -12,6 +15,48 @@
 
 namespace lighton {
 namespace {
+
+// One watchdog per admitted stream, armed only around transport operations.
+class TransportWatchdog {
+ public:
+  TransportWatchdog(grpc::ServerContext* context, std::chrono::milliseconds timeout)
+      : context_(context), timeout_(timeout), worker_([this] { run(); }) {}
+  ~TransportWatchdog() {
+    { std::lock_guard lock(mutex_); stop_ = true; cv_.notify_all(); }
+    worker_.join();
+  }
+  template<class F> bool call(F operation) {
+    { std::lock_guard lock(mutex_); armed_ = true; ++generation_;
+      deadline_ = std::chrono::steady_clock::now() + timeout_; cv_.notify_all(); }
+    bool result = operation();
+    { std::lock_guard lock(mutex_); armed_ = false; ++generation_; cv_.notify_all(); }
+    return result;
+  }
+ private:
+  void run() {
+    std::unique_lock lock(mutex_);
+    while (!stop_) {
+      cv_.wait(lock, [this] { return stop_ || armed_; });
+      if (stop_) break;
+      auto generation = generation_;
+      if (!cv_.wait_until(lock, deadline_, [this, generation] {
+            return stop_ || !armed_ || generation_ != generation;
+          })) {
+        // gRPC sends CANCELLED after TryCancel, irrespective of handler status.
+        context_->TryCancel();
+        return;
+      }
+    }
+  }
+  grpc::ServerContext* context_;
+  std::chrono::milliseconds timeout_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  bool stop_ = false, armed_ = false;
+  uint64_t generation_ = 0;
+  std::chrono::steady_clock::time_point deadline_;
+  std::thread worker_;
+};
 
 grpc::Status invalid(const std::string& message) {
   return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT, message);
@@ -137,6 +182,7 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
     std::atomic<unsigned>& count;
     ~Release() { --count; }
   } release{streams_};
+  TransportWatchdog transport(context, config_.transport_timeout);
   locrv1::ParseDocumentRequest request;
   bool saw_options = false;
   locrv1::ParseOptions options;
@@ -145,7 +191,7 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
   uint64_t steps = 0;
   size_t folded_bytes = 0;
   docv1::Document folded;
-  while (stream->Read(&request)) {
+  while (transport.call([&] { return stream->Read(&request); })) {
     if (context->IsCancelled()) return {grpc::StatusCode::CANCELLED, "request cancelled"};
     switch (request.payload_case()) {
       case locrv1::ParseDocumentRequest::kOptions:
@@ -193,7 +239,7 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
             project_native_result(result, page.page_no(), config_.model, steps, &event);
             if (event.has_page_failure()) {
               ++failed;
-              if (!stream->Write(event)) return {grpc::StatusCode::CANCELLED, "response stream closed"};
+              if (!transport.call([&] { return stream->Write(event); })) return {grpc::StatusCode::CANCELLED, "response stream closed"};
               steps += result.steps.size(); request.Clear(); break;
             }
             auto* document = event.mutable_page_document()->mutable_document();
@@ -226,7 +272,7 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
             failure->set_message("native inference failed"); ++failed;
           }
         }
-        if (!stream->Write(event)) return {grpc::StatusCode::CANCELLED, "response stream closed"};
+        if (!transport.call([&] { return stream->Write(event); })) return {grpc::StatusCode::CANCELLED, "response stream closed"};
         // Keep page numbers for duplicate detection, never retain raster payloads.
         request.Clear();
         break;
@@ -242,14 +288,14 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
   if (options.emit_document() && succeeded) {
     locrv1::ParseDocumentResponse event;
     event.mutable_document()->Swap(&folded);
-    if (!stream->Write(event)) return {grpc::StatusCode::CANCELLED, "response stream closed"};
+    if (!transport.call([&] { return stream->Write(event); })) return {grpc::StatusCode::CANCELLED, "response stream closed"};
   }
   locrv1::ParseDocumentResponse trailer;
   locrv1::ParseComplete* complete = trailer.mutable_complete();
   complete->set_pages(options.page_count());
   complete->set_pages_ok(succeeded);
   complete->set_pages_failed(failed);
-  if (!stream->Write(trailer)) return {grpc::StatusCode::CANCELLED, "response stream closed"};
+  if (!transport.call([&] { return stream->Write(trailer); })) return {grpc::StatusCode::CANCELLED, "response stream closed"};
   return grpc::Status::OK;
 }
 

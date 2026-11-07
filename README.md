@@ -66,6 +66,10 @@ Sampling uses seed zero. A decode has a 60-second deadline and checks client
 cancellation in vision graph evaluation and decoder operations. Shutdown
 marks health non-serving and gives active RPCs five seconds before cancellation.
 
+Blocking reads and writes each have a 30-second transport timeout. Inference
+does not use that timer. Timeout cancels the RPC (CANCELLED on the wire) and
+releases admission capacity; there is no total document-duration cap.
+
 Partial or malformed output remains in the typed failure generation trace, with a
 finish reason and recoverable partial document where available.
 

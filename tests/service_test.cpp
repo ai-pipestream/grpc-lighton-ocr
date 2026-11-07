@@ -261,6 +261,37 @@ int main() {
       expect(stream->Finish().ok(), "admitted stream completes");
     }
   }
+  {
+    lighton::Config limits;
+    limits.transport_timeout = std::chrono::milliseconds(150);
+    Server idle_server = start(limits);
+    auto idle_stub = locrv1::LightOnOcrService::NewStub(
+        grpc::CreateChannel(idle_server.address, grpc::InsecureChannelCredentials()));
+    using Stream = grpc::ClientReaderWriter<locrv1::ParseDocumentRequest, locrv1::ParseDocumentResponse>;
+    std::vector<std::unique_ptr<grpc::ClientContext>> contexts;
+    std::vector<std::unique_ptr<Stream>> streams;
+    const auto began = std::chrono::steady_clock::now();
+    for (int i = 0; i < 4; ++i) {
+      auto context = std::make_unique<grpc::ClientContext>(); // No client deadline.
+      auto stream = idle_stub->ParseDocument(context.get());
+      contexts.push_back(std::move(context)); streams.push_back(std::move(stream));
+    }
+    locrv1::ParseDocumentResponse response;
+    for (auto& stream : streams) {
+      expect(!stream->Read(&response), "idle input terminates without an event");
+      expect(stream->Finish().error_code() == grpc::StatusCode::CANCELLED,
+             "server transport timeout is CANCELLED on wire");
+    }
+    expect(std::chrono::steady_clock::now() - began < std::chrono::seconds(3),
+           "idle clients terminate within bound");
+    grpc::ClientContext recovered;
+    auto stream = idle_stub->ParseDocument(&recovered);
+    stream->WritesDone();
+    expect(!stream->Read(&response), "recovered slot has no event for empty input");
+    expect(stream->Finish().error_code() == grpc::StatusCode::INVALID_ARGUMENT,
+           "idle leases released for next client");
+    idle_server.server->Shutdown();
+  }
   server.server->Shutdown();
   if (failures != 0) return 1;
   std::cout << "service_test ok\n";
