@@ -9,9 +9,11 @@ import time
 
 address, container = sys.argv[1:]
 root = pathlib.Path(__file__).resolve().parent.parent
+image = base64.b64encode((root/'tests/fixtures/native-invoice.png').read_bytes()).decode()
+# Keep work active beyond the five-second shutdown grace period on release builds.
 request = '\n'.join([json.dumps({'options': {'model':'LIGHTON_MODEL_0_8B',
-    'pageCount':1,'emitPageDocuments':True}}), json.dumps({'page':{'pageNo':1,
-    'png':base64.b64encode((root/'tests/fixtures/native-invoice.png').read_bytes()).decode()}})])
+    'pageCount':8,'emitPageDocuments':True}})] + [json.dumps({'page':{'pageNo':n,
+    'png':image}}) for n in range(1,9)])
 client = subprocess.Popen(['grpcurl','-plaintext','-max-time','120',
     '-import-path',str(root/'proto'),'-proto','ai/pipestream/lightonocr/v1/lighton_ocr.proto',
     '-d','@',address,'ai.pipestream.lightonocr.v1.LightOnOcrService/ParseDocument'],
