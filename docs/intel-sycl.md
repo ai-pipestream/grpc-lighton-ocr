@@ -59,3 +59,13 @@ The image's pinned base is a separately versioned toolchain and needs its
 own recorded compiler/runtime identity and hardware results. Shared host
 contention and instrumentation changes must be documented with timings;
 do not promote provisional native timings into general throughput claims.
+
+## Recorded native server qualification
+
+The actual B70 RPC gate and three valid-stream cancellation/recovery cycles
+passed with the full common f550a4e observation fix enabled. Both model
+stages report verified SYCL0 execution and no CPU model computation. The
+five warm two-page medians were1.939sSYCL versus9.050sCPU on the shared host
+(4.668x for this fixture). See `receipts/intel-rpc-f550/README.md` and raw
+outputs for identities, assertions, build details and limits. This does not
+qualify the container recipe or establish broad OCR quality/throughput.
