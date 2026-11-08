@@ -4,7 +4,7 @@
 FROM nvidia/cuda:13.2.1-devel-ubuntu24.04 AS build
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates cmake g++-14 git ninja-build \
+    ca-certificates cmake g++-14 git ninja-build libssl-dev python3 \
     && apt-get clean
 WORKDIR /src
 COPY . .
@@ -12,15 +12,17 @@ ARG CUDA_ARCHITECTURES=87;89
 ARG TARGETARCH
 RUN --mount=type=cache,id=lighton-cuda13.2-ubuntu24-gcc14-grpc1.83-f3586e66-${TARGETARCH},target=/build \
     cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-    -DLIGHTON_CUDA=ON -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
+    -DLIGHTON_CUDA=ON -DBUILD_TESTING=ON -DLIGHTON_QUALIFICATION_MODELS= -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
     -DCMAKE_CUDA_HOST_COMPILER=g++-14 -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
     && cmake --build /build --target grpc-lighton-ocr-server markdown_test service_test --parallel 2 \
-    && ctest --test-dir /build --output-on-failure \
+    && ctest --test-dir /build -R "^(markdown_test|service_test|hardware_rpc_checks_test)$" --output-on-failure \
     && mkdir -p /out/lib \
     && cp /build/grpc-lighton-ocr-server /out/ \
     && cp /build/_deps/llama-src/LICENSE /out/llama-LICENSE \
     && cp -L "$(g++-14 -print-file-name=libstdc++.so.6)" /out/lib/
 FROM nvidia/cuda:13.2.1-runtime-ubuntu24.04
+RUN apt-get update && apt-get install -y --no-install-recommends libssl3t64 ca-certificates \
+    && apt-get clean
 # Jetson's driver supplies compatibility; stale container compat hooks fail.
 RUN for dir in /usr/local/cuda-*/compat*; do if [ -d "$dir" ]; then rm -r "$dir"; fi; done
 COPY --from=build /out/grpc-lighton-ocr-server /usr/local/bin/
