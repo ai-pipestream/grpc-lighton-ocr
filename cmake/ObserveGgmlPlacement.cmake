@@ -44,6 +44,14 @@ string(REPLACE "                struct ggml_cgraph gv = ggml_graph_view(&split->
 # upstream cancellation/data callbacks when they do request a result.
 string(REPLACE "                ggml_backend_synchronize(split_backend);"
   "                if (need) ggml_backend_synchronize(split_backend);" _text "${_text}")
+# A false completion callback cancels the entire submission, not only a split.
+string(REPLACE [=[                if (need && !sched->callback_eval(t, false, sched->callback_eval_user_data)) {
+                    break;
+                }]=] [=[                if (need && !sched->callback_eval(t, false, sched->callback_eval_user_data)) {
+                    // Drain every backend before decoder rollback or request cleanup.
+                    ggml_backend_sched_synchronize(sched);
+                    return GGML_STATUS_ABORTED;
+                }]=] _text "${_text}")
 set(_generated "${CMAKE_CURRENT_BINARY_DIR}/observed-ggml-backend.cpp")
 file(WRITE "${_generated}" "${_text}")
 get_target_property(_sources ggml-base SOURCES)
