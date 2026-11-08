@@ -6,7 +6,7 @@ FROM ${ONEAPI_IMAGE} AS oneapi
 FROM ${UBUNTU_IMAGE} AS build
 COPY --from=oneapi /opt/intel/oneapi /opt/intel/oneapi
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates cmake g++ git ninja-build pkg-config libssl-dev libze-dev \
+    ca-certificates cmake g++ git ninja-build pkg-config libssl-dev libze-dev python3 \
     && rm -rf /var/lib/apt/lists/*
 SHELL ["/bin/bash", "-c"]
 WORKDIR /src
@@ -15,9 +15,9 @@ ARG BUILD_JOBS=2
 RUN set -e; source /opt/intel/oneapi/setvars.sh >/dev/null 2>&1 \
     && cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx \
-      -DLIGHTON_SYCL=ON \
+      -DLIGHTON_SYCL=ON -DBUILD_TESTING=ON -DLIGHTON_QUALIFICATION_MODELS= \
     && cmake --build /build --parallel "$BUILD_JOBS" \
-    && ctest --test-dir /build -R '^(markdown_test|service_test|hardware_rpc_checks_test)$' --output-on-failure
+    && ctest --test-dir /build --output-on-failure
 FROM ${UBUNTU_IMAGE}
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libstdc++6 libssl4 libgomp1 libze1=1.32.0-1 \
