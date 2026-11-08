@@ -92,6 +92,7 @@ FetchContent_Declare(llama
   SYSTEM)
 FetchContent_MakeAvailable(llama)
 include(cmake/AppleLlamaCompleteType.cmake)
+include(cmake/AppleBf16Dot.cmake)
 include(cmake/ObserveGgmlPlacement.cmake)
 
 set(LIGHTON_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
