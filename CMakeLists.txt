@@ -121,6 +121,10 @@ add_executable(grpc-lighton-ocr-server src/main.cpp)
 target_link_libraries(grpc-lighton-ocr-server PRIVATE lighton_service grpc++_reflection)
 lighton_warnings(grpc-lighton-ocr-server)
 
+add_executable(native_lighton_probe tools/native_lighton_probe.cpp)
+target_link_libraries(native_lighton_probe PRIVATE llama mtmd)
+lighton_warnings(native_lighton_probe)
+
 if(BUILD_TESTING)
   add_executable(markdown_test tests/markdown_test.cpp)
   target_link_libraries(markdown_test PRIVATE lighton_parse)
