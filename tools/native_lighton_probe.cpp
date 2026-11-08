@@ -48,7 +48,7 @@ int main(int argc, char** argv) {
     for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
       auto dev = ggml_backend_dev_get(i);
       if (std::string(ggml_backend_reg_name(ggml_backend_dev_backend_reg(dev))) ==
-          (backend == "metal" ? "Metal" : "CPU")) { selected = dev; break; }
+          (backend == "metal" ? "MTL" : "CPU")) { selected = dev; break; }
     }
     if (!selected) throw std::runtime_error("requested backend unavailable");
     auto deadline = Clock::now() + std::chrono::minutes(5);

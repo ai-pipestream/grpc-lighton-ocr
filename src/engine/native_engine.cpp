@@ -109,7 +109,7 @@ NativeEngine::NativeEngine(const std::string& directory, const std::string& back
   if (backend != "cpu" && backend != "cuda" && backend != "sycl" && backend != "metal")
     throw std::invalid_argument("unsupported native backend: " + backend);
   const std::string registry = backend == "cpu" ? "CPU" : backend == "cuda" ? "CUDA" :
-                               backend == "sycl" ? "SYCL" : "Metal";
+                               backend == "sycl" ? "SYCL" : "MTL";
   for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
     auto candidate = ggml_backend_dev_get(i);
     if (registry != ggml_backend_reg_name(ggml_backend_dev_backend_reg(candidate))) continue;
