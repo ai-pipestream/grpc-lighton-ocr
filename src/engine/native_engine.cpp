@@ -57,6 +57,7 @@ struct NativeEngine::Impl {
   struct Observation {
     uint64_t device_arithmetic = 0, cpu_arithmetic = 0, cpu_ops = 0;
     ggml_backend_dev_t cpu_device = nullptr;
+    std::array<uint64_t, GGML_OP_COUNT> cpu_by_op{};
     void observe(ggml_backend_t backend, ggml_tensor* tensor, ggml_backend_dev_t requested) {
       // Copies/views are not model arithmetic. Device accessibility says
       // nothing about execution, especially for Metal/unified memory.
@@ -68,7 +69,7 @@ struct NativeEngine::Impl {
       const std::string_view registry = ggml_backend_reg_name(ggml_backend_dev_backend_reg(dev));
       // BLAS/Accelerate advertises ACCEL, but performs model math on CPU.
       const bool cpu = ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU || registry == "BLAS";
-      if (cpu) ++cpu_ops;
+      if (cpu) { ++cpu_ops; ++cpu_by_op[tensor->op]; }
       if (tensor->op == GGML_OP_MUL_MAT || tensor->op == GGML_OP_MUL_MAT_ID) {
         if (cpu) { ++cpu_arithmetic; cpu_device = dev; }
         if (dev == requested) ++device_arithmetic;
@@ -130,6 +131,11 @@ NativeEngine::NativeEngine(const std::string& directory, const std::string& back
   params.devices = devices;
   params.split_mode = LLAMA_SPLIT_MODE_NONE;
   params.n_gpu_layers = backend == "cpu" ? 0 : 999;
+  // All-layer offload leaves input embeddings on CPU unless explicitly placed.
+  // Use the selected native buffer; observed arithmetic still determines metadata.
+  const llama_model_tensor_buft_override input_override[] = {
+      {"^token_embd\\.weight$", ggml_backend_dev_buffer_type(impl_->device)}, {nullptr, nullptr}};
+  if (backend != "cpu") params.tensor_buft_overrides = input_override;
   impl_->model.reset(llama_model_load_from_file(text.c_str(), params));
   if (!impl_->model) throw std::runtime_error("native model load failed");
   auto vp = mtmd_context_params_default(); vp.use_gpu = backend != "cpu"; vp.device = impl_->device; vp.warmup = false;
@@ -146,6 +152,9 @@ NativeEngine::NativeEngine(const std::string& directory, const std::string& back
 
 }
 NativeEngine::~NativeEngine() = default;
+NativePlacementPair NativeEngine::placement() const {
+  std::lock_guard lock(impl_->placement_mutex); return {impl_->vision_last, impl_->decoder_last};
+}
 NativePlacement NativeEngine::vision_placement() const {
   std::lock_guard lock(impl_->placement_mutex); return impl_->vision_last;
 }
@@ -240,7 +249,7 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
     size_t trace_bytes = 0;
     for (uint32_t i = 0; i < max_tokens; ++i) {
       if (control.cancelled()) throw EngineError(EngineError::cancelled, "client cancelled inference");
-      if (Clock::now() >= control.deadline) { result.finish = NativeFinish::deadline; return result; }
+      if (Clock::now() >= control.deadline) { result.finish = NativeFinish::deadline; result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result; }
       llama_token token = llama_sampler_sample(sampler.get(), ctx.get(), -1);
       const float* logits = llama_get_logits_ith(ctx.get(), -1);
       const int count = llama_vocab_n_tokens(vocab);
@@ -250,14 +259,14 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
       const double normalizer = logits[top] + std::log(sum);
       const std::string_view raw_piece(llama_vocab_get_text(vocab, token));
       if (raw_piece.size() > kMaxOutputBytes - trace_bytes)
-        { result.finish = NativeFinish::output_limit; return result; }
+        { result.finish = NativeFinish::output_limit; result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result; }
       trace_bytes += raw_piece.size();
       result.steps.push_back({static_cast<uint32_t>(token), static_cast<uint32_t>(top),
           llama_vocab_get_text(vocab, token), static_cast<float>(logits[token] - normalizer),
           static_cast<float>(logits[top] - normalizer)});
       if (llama_vocab_is_eog(vocab, token)) {
         if (raw_piece.size() > kMaxOutputBytes - result.raw_text.size())
-          { result.finish = NativeFinish::output_limit; return result; }
+          { result.finish = NativeFinish::output_limit; result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result; }
         result.raw_text += raw_piece; complete = true; break;
       }
       std::vector<char> piece(256);
@@ -265,7 +274,7 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
       if (n < 0) { if (n < -65536) throw EngineError(EngineError::budget, "token piece too large"); piece.resize(-n); n = llama_token_to_piece(vocab, token, piece.data(), piece.size(), 0, true); }
       if (n < 0) throw std::runtime_error("token decode failed");
       if (result.text.size() + static_cast<size_t>(n) > kMaxOutputBytes)
-        { result.finish = NativeFinish::output_limit; return result; }
+        { result.finish = NativeFinish::output_limit; result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result; }
       result.text.append(piece.data(), n); result.raw_text.append(piece.data(), n); ++result.tokens;
       llama_batch_ext_clear(batch.get());
       int index = llama_batch_ext_add_token(batch.get(), 0, token);
@@ -276,7 +285,7 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
       if (llama_process(ctx.get(), LLAMA_PROCESS_TYPE_DECODE, batch.get())) {
         if (control.cancelled()) throw EngineError(EngineError::cancelled, "client cancelled inference");
         result.finish = Clock::now() >= control.deadline ? NativeFinish::deadline : NativeFinish::engine_error;
-        return result;
+        result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result;
       }
     }
     if (!complete) result.finish = NativeFinish::token_limit;
@@ -287,14 +296,19 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
               << " decoder=" << decoder_placement().device_id
               << " matmuls=" << impl_->decoder_observation.device_arithmetic
               << " cpu_ops=" << impl_->decoder_observation.cpu_ops << '\n';
-    return result;
+    for (int op = 0; op < GGML_OP_COUNT; ++op) {
+      if (impl_->decoder_observation.cpu_by_op[op])
+        std::cerr << "decoder CPU op=" << ggml_op_name(static_cast<ggml_op>(op))
+                  << " count=" << impl_->decoder_observation.cpu_by_op[op] << '\n';
+    }
+    result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result;
     } catch (const EngineError& error) {
       if (error.kind == EngineError::cancelled) throw;
       result.finish = error.kind == EngineError::budget ? NativeFinish::output_limit : NativeFinish::engine_error;
-      return result;
+      result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result;
     } catch (const std::exception&) {
       result.finish = NativeFinish::engine_error;
-      return result;
+      result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result;
     }
 }
 }
