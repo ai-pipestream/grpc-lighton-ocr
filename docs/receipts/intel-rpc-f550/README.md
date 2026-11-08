@@ -31,7 +31,14 @@ recovery. Recovery RPCs took3.375s,3.247s,2.763s. This is actual stream
 cancellation/recovery, unlike the older native pre-cancel smoke.
 
 Raw RPC outputs, comparison.json, cancellations, exits, server phase timings
-and actual placement logs are retained in the three subdirectories. Server
+and actual placement logs are retained in the three subdirectories. Large
+server stderr and RPC JSONL logs are losslessly compressed as `.gz` with
+mtime=0; `compressed-logs.json` records every original path, byte count and
+SHA256, plus the compressed hash. Summaries, info JSON and source manifests
+remain readable. Use `gzip -dc FILE.gz` to inspect an original log. All
+compressed files were decompressed and checked byte-for-byte before the
+original text copies were replaced. Earlier failed placement proof in
+`../intel-native` is unchanged. Server
 binary hash is in rpc-f550-servers/binary.sha256. Model/projector identities
 and SHA256 are in both info JSONs. Native runtime libraries:
 
