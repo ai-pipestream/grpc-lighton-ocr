@@ -12,8 +12,8 @@ SHELL ["/bin/bash", "-c"]
 WORKDIR /src
 COPY . .
 ARG BUILD_JOBS=2
-RUN source /opt/intel/oneapi/setvars.sh >/dev/null 2>&1; \
-    set -e; cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+RUN set -e; source /opt/intel/oneapi/setvars.sh >/dev/null 2>&1 \
+    && cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx \
       -DLIGHTON_SYCL=ON \
     && cmake --build /build --parallel "$BUILD_JOBS" \
