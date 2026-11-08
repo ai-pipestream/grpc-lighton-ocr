@@ -6,7 +6,7 @@
 #include <random>
 #include <vector>
 
-void ggml_vec_dot_bf16(int, float*, size_t, ggml_bf16_t*, size_t, ggml_bf16_t*, size_t, int);
+extern "C" void ggml_vec_dot_bf16(int, float*, size_t, ggml_bf16_t*, size_t, ggml_bf16_t*, size_t, int);
 
 int main() {
     std::mt19937 random(1042);
