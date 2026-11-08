@@ -19,6 +19,16 @@ endfunction()
 include(CTest)
 include(FetchContent)
 
+option(LIGHTON_SYSTEM_GRPC "Use installed native protobuf and gRPC" OFF)
+if(LIGHTON_SYSTEM_GRPC)
+  find_package(Protobuf REQUIRED)
+  find_package(gRPC CONFIG REQUIRED)
+  add_executable(protoc ALIAS protobuf::protoc)
+  add_executable(grpc_cpp_plugin ALIAS gRPC::grpc_cpp_plugin)
+  add_library(grpc++ ALIAS gRPC::grpc++)
+  add_library(grpc++_reflection ALIAS gRPC::grpc++_reflection)
+  set(protobuf_SOURCE_DIR "${Protobuf_INCLUDE_DIRS}/..")
+else()
 set(gRPC_INSTALL OFF CACHE BOOL "" FORCE)
 set(gRPC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(gRPC_BUILD_CSHARP_EXT OFF CACHE BOOL "" FORCE)
@@ -37,6 +47,7 @@ FetchContent_Declare(grpc
   GIT_SUBMODULES_RECURSE TRUE
   SYSTEM)
 FetchContent_MakeAvailable(grpc)
+endif()
 
 # In-process backends. CPU remains available in every build.
 option(LIGHTON_CUDA "Build the native CUDA backend" OFF)
