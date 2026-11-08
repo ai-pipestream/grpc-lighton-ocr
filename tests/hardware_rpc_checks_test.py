@@ -19,7 +19,7 @@ def output():
     for number in (1, 2):
         base = {"text": text, "selfRef": f"#/texts/{number - 1}", "prov": [{
             "pageNo": number, "charspan": {"end": len(text)},
-            "bbox": {"l": 10, "r": 500, "t": 10, "b": 50}}]}
+            "bbox": {"l": 10, "r": 500, "t": 10, "b": 220}}]}
         events.append({"pageDocument": {"pageNo": number, "provenance": provenance,
             "finishReason": "FINISH_REASON_END_TOKEN", "document": {
                 "texts": [{"text": {"base": base}}],
@@ -54,7 +54,7 @@ class HardwareChecks(unittest.TestCase):
 
     def test_real_content_and_geometry_required(self):
         validate_output(output(), placement())
-        for failure in ("text", "box", "partial", "page", "trailer", "reference"):
+        for failure in ("text", "box", "shifted_box", "whole_page_box", "partial", "page", "trailer", "reference"):
             with self.subTest(failure=failure):
                 events = copy.deepcopy(output())
                 page = events[1]["pageDocument"]
@@ -63,6 +63,10 @@ class HardwareChecks(unittest.TestCase):
                     base["text"] = "nonempty but wrong"
                 elif failure == "box":
                     base["prov"][0]["bbox"]["r"] = 10
+                elif failure == "shifted_box":
+                    base["prov"][0]["bbox"] = {"l": 600, "r": 950, "t": 10, "b": 220}
+                elif failure == "whole_page_box":
+                    base["prov"][0]["bbox"] = {"l": 0, "r": 1000, "t": 0, "b": 300}
                 elif failure == "partial":
                     page["finishReason"] = "FINISH_REASON_TOKEN_LIMIT"
                 elif failure == "page":
