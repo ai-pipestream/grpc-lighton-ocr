@@ -1,4 +1,4 @@
-// Native engine qualification helper, without RPC. RPC acceptance is separate.
+// Native engine smoke helper, without RPC. RPC acceptance is separate.
 #include "engine/native_engine.h"
 #include <chrono>
 #include <fstream>
@@ -39,14 +39,15 @@ int main(int argc, char** argv) {
           throw std::runtime_error("full stage placement assertion failed");
       }
     }
+    // Pre-cancel smoke only. The real RPC gate must cancel active inference.
     bool cancelled = false;
     try { engine.infer(bytes, 256, 0, 0, 0, [] { return true; }); }
     catch (const lighton::EngineError& error) { cancelled = error.kind == lighton::EngineError::cancelled; }
-    if (!cancelled) throw std::runtime_error("cancellation not observed");
+    if (!cancelled) throw std::runtime_error("pre-cancellation not observed");
     auto recovered = engine.infer(bytes, 256, 0, 0, 0, [] { return false; });
     if (recovered.finish != lighton::NativeFinish::end_token || recovered.text.find("INVOICE 1042") == std::string::npos)
       throw std::runtime_error("recovery failed");
-    std::cout << "PASS native engine text/box/repeats/cancel/recovery; RPC is separate\n";
+    std::cout << "PASS native engine text/basic-box/repeats/pre-cancel/recovery; RPC is separate\n";
     return 0;
   } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }
