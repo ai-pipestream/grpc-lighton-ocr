@@ -36,16 +36,27 @@ BF16 dot routine. An Apple-only, hash-guarded generated-source repair adds
 NEON products with FP64 accumulation; it does not edit the fetched checkout,
 change weights, or extend the deadline. At `5ad28b4`, the full native build
 and all four unit tests passed (1.08 seconds), including 840 numerical BF16
-reference cases covering tails and unaligned inputs. Actual RPC reruns remain
-required before claiming either fix qualifies the service.
+reference cases covering tails and unaligned inputs.
 
-## Required hardware rerun
+The actual RPC rerun passed at `1bfc1df0cdee5f17e211be07001996155facfad5`,
+with observation enabled, the common cache/graph-UID fixes and Apple BF16
+repair. All five measured two-page pairs passed text, anchored geometry,
+references, completion and verified placement. Median CPU latency was
+21.942904 seconds versus Metal 2.574777 seconds (8.52225x). Both Metal
+stages disclosed `cpu_compute=false`; both CPU stages disclosed true.
+Three valid-stream cancellation/TCP-recovery cycles passed (recovery RPCs
+2.538, 2.628 and 2.579 seconds). Both owned servers were stopped afterward.
+No other compile/model job ran during the measured comparison. These are
+combined-build results, not an isolated NEON speedup claim. Exact source
+mapping and raw receipts: [metal-m2-20261108](receipts/metal-m2-20261108/README.md).
+
+## Reproducing the hardware run
 
 Use the parent's standalone `tests/hardware_rpc_test.py` with Metal and
 explicit CPU endpoints on the same host. Its paired endpoint design needs
 two model instances during the bounded comparison; inspect memory pressure
 before starting, serialize requests, and stop both owned instances afterward.
 Preserve raw outputs in a fresh output directory. Run
-`tests/metal_lifecycle_test.py` against the Metal endpoint for repeated
-cancellation/recovery. Both scripts enforce actual placement and output
+`tests/hardware_cancellation_test.py --backend metal` against the Metal
+endpoint for valid-stream cancellation/recovery. Both scripts enforce actual placement and output
 assertions; neither should be weakened to make this checkpoint pass.
