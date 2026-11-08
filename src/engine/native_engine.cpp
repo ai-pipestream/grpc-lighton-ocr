@@ -1,5 +1,6 @@
 #include "engine/native_engine.h"
 #include <chrono>
+#include <cstdlib>
 #include <atomic>
 #include <iostream>
 #include "ggml-backend.h"
@@ -62,7 +63,11 @@ struct NativeEngine::Impl {
       const std::string_view registry = ggml_backend_reg_name(ggml_backend_dev_backend_reg(dev));
       // BLAS/Accelerate advertises ACCEL, but performs model math on CPU.
       const bool cpu = ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU || registry == "BLAS";
-      if (cpu) ++cpu_ops;
+      if (cpu) {
+        ++cpu_ops;
+        if (std::getenv("GRPC_LIGHTON_TRACE_PLACEMENT"))
+          std::cerr << "placement CPU op=" << ggml_op_name(tensor->op) << " tensor=" << tensor->name << "\n";
+      }
       if (tensor->op == GGML_OP_MUL_MAT || tensor->op == GGML_OP_MUL_MAT_ID) {
         if (cpu) { ++cpu_arithmetic; cpu_device = dev; }
         if (dev == requested) ++device_arithmetic;
@@ -124,6 +129,11 @@ NativeEngine::NativeEngine(const std::string& directory, const std::string& back
   params.devices = devices;
   params.split_mode = LLAMA_SPLIT_MODE_NONE;
   params.n_gpu_layers = backend == "cpu" ? 0 : 999;
+  // llama keeps input embeddings on CPU even when all transformer layers
+  // are offloaded. SYCL's BF16 GET_ROWS supports this table on the GPU.
+  const llama_model_tensor_buft_override input_override[] = {
+      {"^token_embd\\.weight$", ggml_backend_dev_buffer_type(impl_->device)}, {nullptr, nullptr}};
+  if (backend == "sycl") params.tensor_buft_overrides = input_override;
   impl_->model.reset(llama_model_load_from_file(text.c_str(), params));
   if (!impl_->model) throw std::runtime_error("native model load failed");
   auto vp = mtmd_context_params_default(); vp.use_gpu = backend != "cpu"; vp.device = impl_->device; vp.warmup = false;
