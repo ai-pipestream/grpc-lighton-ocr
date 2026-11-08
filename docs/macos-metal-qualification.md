@@ -20,6 +20,9 @@ the correct invoice and geometry for page 1, but page 2 reached the existing
 60-second native deadline after 27 tokens. Vision encoding took 42.787 and
 44.806 seconds; decoder prefill took 0.887 and 0.925 seconds. No deadline or
 acceptance threshold was raised.
+Another lane subsequently reported compiler overlap during this attempt.
+These timings are diagnostic observations, not an isolated CPU benchmark;
+the optimization's contribution requires a fresh serialized comparison.
 
 The Metal request executed both stages on MTL0, but the scheduler observed
 52 vision matmuls with zero CPU operations and 7106 decoder matmuls with
