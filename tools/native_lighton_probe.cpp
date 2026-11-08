@@ -11,6 +11,7 @@
 #include "mtmd.h"
 #include "mtmd-helper.h"
 #include "ggml-backend.h"
+#include "ggml-cpu.h"
 
 using Clock = std::chrono::steady_clock;
 static bool expired(void* data) { return Clock::now() > *static_cast<Clock::time_point*>(data); }
@@ -24,8 +25,14 @@ struct Placement {
     if (ask) return true;
     if (tensor->op == GGML_OP_NONE || tensor->op == GGML_OP_VIEW || tensor->op == GGML_OP_RESHAPE ||
         tensor->op == GGML_OP_TRANSPOSE || tensor->op == GGML_OP_PERMUTE) return true;
-    auto device = tensor->buffer ? ggml_backend_buft_get_device(ggml_backend_buffer_get_type(tensor->buffer)) : nullptr;
-    if (device == p.selected) ++p.selected_ops;
+    auto buffer_type = tensor->buffer ? ggml_backend_buffer_get_type(tensor->buffer) : nullptr;
+    auto device = buffer_type ? ggml_backend_buft_get_device(buffer_type) : nullptr;
+    // The pinned native CPU buffer type intentionally has no device pointer.
+    // Match its exact identity, never infer CPU from host accessibility.
+    if (buffer_type == ggml_backend_cpu_buffer_type()) {
+      ++p.cpu_ops;
+      if (ggml_backend_dev_type(p.selected) == GGML_BACKEND_DEVICE_TYPE_CPU) ++p.selected_ops;
+    } else if (device == p.selected) ++p.selected_ops;
     else if (device && ggml_backend_dev_type(device) == GGML_BACKEND_DEVICE_TYPE_CPU) ++p.cpu_ops;
     else ++p.other_ops;
     return true;
