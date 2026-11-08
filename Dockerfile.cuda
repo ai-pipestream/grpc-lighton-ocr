@@ -15,11 +15,15 @@ RUN --mount=type=cache,id=lighton-cuda13.2-ubuntu24-gcc14-grpc1.83-f3586e66-${TA
     -DLIGHTON_CUDA=ON -DBUILD_TESTING=ON -DLIGHTON_QUALIFICATION_MODELS= -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
     -DCMAKE_CUDA_HOST_COMPILER=g++-14 -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
     && cmake --build /build --parallel 2 \
-    && ctest --test-dir /build --output-on-failure \
+    && mkdir -p /tmp/cuda-test-stubs \
+    && cp /usr/local/cuda/lib64/stubs/libcuda.so /tmp/cuda-test-stubs/libcuda.so.1 \
+    && LD_LIBRARY_PATH=/tmp/cuda-test-stubs:${LD_LIBRARY_PATH} ctest --test-dir /build --output-on-failure \
     && mkdir -p /out/lib \
     && cp /build/grpc-lighton-ocr-server /out/ \
     && cp /build/_deps/llama-src/LICENSE /out/llama-LICENSE \
     && cp -L "$(g++-14 -print-file-name=libstdc++.so.6)" /out/lib/
+# Build-time tests exercise CPU/control paths without a driver. The temporary
+# loader stub is never copied into the runtime image or used for hardware tests.
 FROM nvidia/cuda:13.2.1-runtime-ubuntu24.04
 RUN apt-get update && apt-get install -y --no-install-recommends libssl3t64 ca-certificates \
     && apt-get clean
