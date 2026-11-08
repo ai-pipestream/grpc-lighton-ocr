@@ -1,6 +1,7 @@
 #include "service/lighton_service.h"
 
 #include <cstdint>
+#include <iostream>
 #include <unistd.h>
 #include <array>
 #include <condition_variable>
@@ -28,7 +29,10 @@ class TransportWatchdog {
   template<class F> bool call(F operation) {
     { std::lock_guard lock(mutex_); armed_ = true; ++generation_;
       deadline_ = std::chrono::steady_clock::now() + timeout_; cv_.notify_all(); }
+    const auto start = std::chrono::steady_clock::now();
     bool result = operation();
+    std::cerr << "service_phase transport ms=" << std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - start).count() << '\n';
     { std::lock_guard lock(mutex_); armed_ = false; ++generation_; cv_.notify_all(); }
     return result;
   }
@@ -255,9 +259,12 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
             auto result = engine_->infer(page.png(), options.max_tokens_per_page(),
                 options.temperature(), page.width_px(), page.height_px(),
                 [&] { return context->IsCancelled(); });
+            const auto project_start = std::chrono::steady_clock::now();
             project_native_result(result, page.page_no(), config_.model, steps, &event);
             provenance(event.has_page_document() ? event.mutable_page_document()->mutable_provenance() :
                        event.mutable_page_failure()->mutable_provenance(), nullptr, &result.placement);
+            std::cerr << "service_phase project ms=" << std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - project_start).count() << '\n';
             if (event.has_page_failure()) {
               ++failed;
               if (!transport.call([&] { return stream->Write(event); })) return {grpc::StatusCode::CANCELLED, "response stream closed"};
