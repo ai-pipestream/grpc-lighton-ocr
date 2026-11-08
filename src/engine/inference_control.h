@@ -5,6 +5,8 @@
 #include <iostream>
 #include <mutex>
 
+struct ggml_tensor;
+
 namespace lighton::detail {
 using Clock = std::chrono::steady_clock;
 struct Control {
@@ -45,4 +47,39 @@ struct Control {
     }
   }
 };
+// Stop callbacks remain installed even when placement counters are disabled.
+struct EvaluationControl {
+  Control* active = nullptr;
+  bool vision_active = false;
+  static bool vision(ggml_tensor*, bool ask, void* opaque) {
+    auto& state = *static_cast<EvaluationControl*>(opaque);
+    state.vision_active = true;
+    return ask ? (state.active && state.active->stop()) : false;
+  }
+  static bool decoder(ggml_tensor*, bool ask, void* opaque) {
+    auto& state = *static_cast<EvaluationControl*>(opaque);
+    state.vision_active = false;
+    return ask ? (state.active && state.active->stop()) : false;
+  }
+  template<class Params> void configure_vision(Params& params) {
+    params.cb_eval = vision;
+    params.cb_eval_user_data = this;
+  }
+  template<class Params> void configure_decoder(Params& params) {
+    params.cb_eval = decoder;
+    params.cb_eval_user_data = this;
+  }
+};
+
+// Native libraries may return success after their last cancellation poll.
+// Check before interpreting status, placement or a terminal token boundary.
+template<class Call> auto checked_native_call(Control& control, Call&& call) {
+  auto status = call();
+  control.check();
+  return status;
+}
+inline NativeFinish terminal_finish(Control& control, bool complete) {
+  control.check();
+  return complete ? NativeFinish::end_token : NativeFinish::token_limit;
+}
 }  // namespace lighton::detail
