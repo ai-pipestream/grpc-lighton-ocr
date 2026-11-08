@@ -86,6 +86,7 @@ FetchContent_Declare(llama
   GIT_TAG f3586e66bc916d672773d4a6505513ba91a3595c
   SYSTEM)
 FetchContent_MakeAvailable(llama)
+include(cmake/AppleLlamaCompleteType.cmake)
 include(cmake/ObserveGgmlPlacement.cmake)
 
 set(LIGHTON_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
