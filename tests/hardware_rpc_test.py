@@ -133,7 +133,6 @@ def main():
         raw, _ = rpc(address, "GetServiceInfo", "{}", options.timeout)
         info = json.loads(raw)
         require(info.get("engineLoaded") is True, f"{label} model not loaded")
-        validate_placement(info["provenance"], backend)
         infos[label] = info
         (options.output / f"{label}-info.json").write_text(raw)
     for key in ("modelSha256", "projectorSha256", "modelRevision", "backendRevision",
@@ -148,6 +147,19 @@ def main():
         for label in order:
             raw, seconds = rpc(getattr(options, label), "ParseDocument", payload, options.timeout)
             (options.output / f"{label}-{iteration}.jsonl").write_text(raw)
+            if iteration == 0:
+                # A cold process cannot claim observed execution until it
+                # has actually evaluated the model. Verify after warm-up.
+                info_raw, _ = rpc(getattr(options, label), "GetServiceInfo", "{}", options.timeout)
+                observed = json.loads(info_raw)
+                for key in ("modelSha256", "projectorSha256", "modelRevision",
+                            "backendRevision", "serviceVersion", "serverInstance"):
+                    require(observed["provenance"].get(key) == infos[label]["provenance"].get(key),
+                            f"{label} identity changed during warm-up: {key}")
+                validate_placement(observed["provenance"],
+                                   "cpu" if label == "cpu" else options.backend)
+                infos[label] = observed
+                (options.output / f"{label}-observed-info.json").write_text(info_raw)
             validate_output(decode_events(raw), infos[label]["provenance"])
             if iteration:
                 samples[label].append(seconds)
