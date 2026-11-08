@@ -281,6 +281,12 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
                 error.kind == EngineError::budget ? locrv1::PAGE_FAILURE_CODE_RESOURCE_LIMIT :
                 locrv1::PAGE_FAILURE_CODE_INFERENCE);
             provenance(failure->mutable_provenance(), engine_.get());
+            if (error.kind == EngineError::bad_image || error.kind == EngineError::budget) {
+              // Admission can fail before any graph: do not attribute a prior
+              // page's completed computation to this rejected input.
+              failure->mutable_provenance()->clear_stages();
+              failure->mutable_provenance()->set_device("unverified");
+            }
             failure->set_message(error.what()); ++failed;
           } catch (const std::exception&) {
             if (context->IsCancelled()) return {grpc::StatusCode::CANCELLED, "inference cancelled"};

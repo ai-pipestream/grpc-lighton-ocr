@@ -15,15 +15,24 @@ extern "C" void lighton_ggml_set_observer(lighton_observer observer, void * data
     lighton_observe_data = data;
 }
 // backend buffer type]=] _text "${_text}")
-string(REPLACE "        // record the event of this split" [=[
-        // This split was successfully submitted to this exact native backend.
-        // No tensor readback or extra synchronization is introduced here.
-        if (lighton_observe) {
-            for (int n = 0; n < split->graph.n_nodes; ++n) {
-                lighton_observe(split_backend, split->graph.nodes[n], lighton_observe_data);
+# Observe only the submitted range, including when cancellation stops a split.
+string(REPLACE [=[            if (ec != GGML_STATUS_SUCCESS) {
+                return ec;
             }
-        }
-        // record the event of this split]=] _text "${_text}")
+        } else {]=] [=[            if (ec != GGML_STATUS_SUCCESS) {
+                return ec;
+            }
+            if (lighton_observe) {
+                for (int n = 0; n < split->graph.n_nodes; ++n)
+                    lighton_observe(split_backend, split->graph.nodes[n], lighton_observe_data);
+            }
+        } else {]=] _text "${_text}")
+string(REPLACE "                // TODO: pass backend to the callback, then the user can decide if they want to synchronize" [=[
+                if (lighton_observe) {
+                    for (int n = j0; n <= j1; ++n)
+                        lighton_observe(split_backend, split->graph.nodes[n], lighton_observe_data);
+                }
+                // TODO: pass backend to the callback, then the user can decide if they want to synchronize]=] _text "${_text}")
 # No tensor data is requested, so no synchronization is needed. Preserve
 # upstream cancellation/data callbacks when they do request a result.
 string(REPLACE "                ggml_backend_synchronize(split_backend);"
