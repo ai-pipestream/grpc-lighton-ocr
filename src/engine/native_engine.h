@@ -8,7 +8,7 @@
 #include <stdexcept>
 namespace lighton {
 struct EngineError : std::runtime_error {
-  enum Kind { bad_image, budget, cancelled, busy, inference } kind;
+  enum Kind { bad_image, budget, cancelled, busy, inference, deadline } kind;
   EngineError(Kind k, const char* message) : std::runtime_error(message), kind(k) {}
 };
 struct NativeStep { uint32_t token, top_token; std::string piece; float logprob, top_logprob; };
