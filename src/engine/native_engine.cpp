@@ -1,5 +1,8 @@
 #include "engine/native_engine.h"
 #include <chrono>
+#include <atomic>
+#include <iostream>
+#include "ggml-backend.h"
 #include <fstream>
 #include <mutex>
 #include <vector>
@@ -11,6 +14,8 @@
 #include "mtmd.h"
 #include "mtmd-helper.h"
 #include "stb_image.h"
+extern "C" void lighton_ggml_set_observer(
+    void (*observer)(ggml_backend_t, ggml_tensor*, void*), void* data);
 namespace lighton {
 namespace {
 using Clock = std::chrono::steady_clock;
@@ -41,29 +46,101 @@ struct NativeEngine::Impl {
   std::mutex mutex;
   std::string projector;
   Control* active = nullptr;
+  ggml_backend_dev_t device = nullptr;
+  std::string backend;
+  struct Observation {
+    uint64_t device_arithmetic = 0, cpu_arithmetic = 0, cpu_ops = 0;
+    void observe(ggml_backend_t backend, ggml_tensor* tensor, ggml_backend_dev_t requested) {
+      // Copies/views are not model arithmetic. Device accessibility says
+      // nothing about execution, especially for Metal/unified memory.
+      if (tensor->op == GGML_OP_NONE || tensor->op == GGML_OP_VIEW ||
+          tensor->op == GGML_OP_RESHAPE || tensor->op == GGML_OP_TRANSPOSE ||
+          tensor->op == GGML_OP_PERMUTE || tensor->op == GGML_OP_CPY ||
+          tensor->op == GGML_OP_CONT || tensor->op == GGML_OP_DUP) return;
+      const auto dev = ggml_backend_get_device(backend);
+      const bool cpu = ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU;
+      if (cpu) ++cpu_ops;
+      if (tensor->op == GGML_OP_MUL_MAT || tensor->op == GGML_OP_MUL_MAT_ID) {
+        if (cpu) ++cpu_arithmetic;
+        if (dev == requested) ++device_arithmetic;
+      }
+    }
+  } vision_observation, decoder_observation;
+  mutable std::mutex placement_mutex;
+  NativePlacement vision_last, decoder_last;
+  static void observe(ggml_backend_t backend, ggml_tensor* tensor, void* opaque) {
+    auto& state = *static_cast<Impl*>(opaque);
+    // mtmd and llama use distinct graphs. The caller selects the stage at
+    // the encode/eval boundary below through stage-specific callbacks.
+    auto& target = state.vision_active ? state.vision_observation : state.decoder_observation;
+    target.observe(backend, tensor, state.device);
+  }
+  bool vision_active = false;
+  NativePlacement snapshot(const Observation& observation) const {
+    return {backend, ggml_backend_dev_description(device), ggml_backend_dev_name(device),
+            observation.device_arithmetic > 0, observation.cpu_ops > 0};
+  }
+  void publish() {
+    std::lock_guard lock(placement_mutex);
+    vision_last = snapshot(vision_observation);
+    decoder_last = snapshot(decoder_observation);
+  }
   std::unique_ptr<llama_model, decltype(&llama_model_free)> model{nullptr, llama_model_free};
   std::unique_ptr<mtmd_context, decltype(&mtmd_free)> vision{nullptr, mtmd_free};
 };
-NativeEngine::NativeEngine(const std::string& directory) : impl_(std::make_unique<Impl>()) {
+NativeEngine::NativeEngine(const std::string& directory, const std::string& backend,
+                           const std::string& device) : impl_(std::make_unique<Impl>()) {
   const std::string text = directory + "/model-bf16.gguf";
   impl_->projector = directory + "/vision-bf16.gguf";
-  verify(text, kModelSha); verify(impl_->projector, kProjectorSha);
+
   static std::once_flag initialized;
   std::call_once(initialized, [] { llama_backend_init(); });
-  auto params = llama_model_default_params(); params.n_gpu_layers = 0;
+  if (backend != "cpu" && backend != "cuda" && backend != "sycl" && backend != "metal")
+    throw std::invalid_argument("unsupported native backend: " + backend);
+  const std::string registry = backend == "cpu" ? "CPU" : backend == "cuda" ? "CUDA" :
+                               backend == "sycl" ? "SYCL" : "Metal";
+  for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+    auto candidate = ggml_backend_dev_get(i);
+    if (registry != ggml_backend_reg_name(ggml_backend_dev_backend_reg(candidate))) continue;
+    if (!device.empty() && device != ggml_backend_dev_name(candidate)) continue;
+    if (backend != "cpu" && ggml_backend_dev_type(candidate) != GGML_BACKEND_DEVICE_TYPE_GPU &&
+        ggml_backend_dev_type(candidate) != GGML_BACKEND_DEVICE_TYPE_IGPU) continue;
+    impl_->device = candidate; break;
+  }
+  if (!impl_->device) throw std::runtime_error("requested native backend/device unavailable: " + backend + "/" + device);
+  impl_->backend = backend;
+  // Initialize the selected device before reading weights; never fall back.
+  auto validation = ggml_backend_dev_init(impl_->device, nullptr);
+  if (!validation) throw std::runtime_error("requested device initialization failed");
+  ggml_backend_free(validation);
+  verify(text, kModelSha); verify(impl_->projector, kProjectorSha);
+  ggml_backend_dev_t devices[] = {backend == "cpu" ? nullptr : impl_->device, nullptr};
+  auto params = llama_model_default_params();
+  params.devices = devices;
+  params.split_mode = LLAMA_SPLIT_MODE_NONE;
+  params.n_gpu_layers = backend == "cpu" ? 0 : 999;
   impl_->model.reset(llama_model_load_from_file(text.c_str(), params));
   if (!impl_->model) throw std::runtime_error("native model load failed");
-  auto vp = mtmd_context_params_default(); vp.use_gpu = false; vp.warmup = false;
+  auto vp = mtmd_context_params_default(); vp.use_gpu = backend != "cpu"; vp.device = impl_->device; vp.warmup = false;
   vp.n_threads = 2; vp.image_max_tokens = 2048;
   vp.cb_eval_user_data = impl_.get();
   vp.cb_eval = [](ggml_tensor*, bool ask, void* opaque) {
-    auto* state = static_cast<Impl*>(opaque);
-    return ask || state->active == nullptr || !state->active->stop();
+    auto& state = *static_cast<Impl*>(opaque);
+    state.vision_active = true;
+    return ask ? (state.active && state.active->stop()) : false;
   };
   impl_->vision.reset(mtmd_init_from_file(impl_->projector.c_str(), impl_->model.get(), vp));
   if (!impl_->vision) throw std::runtime_error("native projector load failed");
+  impl_->publish(); // Identities are known; runtime verification is still false.
+
 }
 NativeEngine::~NativeEngine() = default;
+NativePlacement NativeEngine::vision_placement() const {
+  std::lock_guard lock(impl_->placement_mutex); return impl_->vision_last;
+}
+NativePlacement NativeEngine::decoder_placement() const {
+  std::lock_guard lock(impl_->placement_mutex); return impl_->decoder_last;
+}
 NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, float temperature,
                                 uint32_t width, uint32_t height, std::function<bool()> cancelled) {
   std::unique_lock lock(impl_->mutex, std::try_to_lock);
@@ -90,10 +167,21 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
   NativeResult result{{}, {}, static_cast<uint32_t>(w), static_cast<uint32_t>(h), 0, {}};
     Control control{Clock::now() + std::chrono::seconds(60), std::move(cancelled)};
     impl_->active = &control;
+    impl_->vision_observation = {}; impl_->decoder_observation = {};
+    lighton_ggml_set_observer(Impl::observe, impl_.get());
+    struct ClearObserver { ~ClearObserver() { lighton_ggml_set_observer(nullptr, nullptr); } } clear_observer;
     struct ClearActive { Impl* state; ~ClearActive() { state->active = nullptr; } } clear{impl_.get()};
     auto cp = llama_context_default_params();
     cp.n_ctx = kContext; cp.n_batch = 512; cp.n_ubatch = 512;
     cp.n_threads = 2; cp.n_threads_batch = 2;
+    cp.cb_eval_user_data = impl_.get();
+    cp.cb_eval = [](ggml_tensor*, bool ask, void* opaque) {
+      auto& state = *static_cast<Impl*>(opaque);
+      state.vision_active = false;
+      return ask ? (state.active && state.active->stop()) : false;
+    };
+    cp.offload_kqv = impl_->backend != "cpu";
+    cp.op_offload = impl_->backend != "cpu";
     cp.abort_callback = abort_decode; cp.abort_callback_data = &control;
     std::unique_ptr<llama_context, decltype(&llama_free)> ctx(
         llama_init_from_model(impl_->model.get(), cp), llama_free);
@@ -121,6 +209,9 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
       control.check();
       throw std::runtime_error("native multimodal prefill failed");
     }
+    if (!impl_->snapshot(impl_->vision_observation).runtime_verified ||
+        !impl_->snapshot(impl_->decoder_observation).runtime_verified)
+      throw std::runtime_error("model stage did not execute arithmetic on the requested device");
     try {
     std::unique_ptr<llama_sampler, decltype(&llama_sampler_free)> sampler(
         llama_sampler_chain_init(llama_sampler_chain_default_params()), llama_sampler_free);
@@ -177,6 +268,13 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
       }
     }
     if (!complete) result.finish = NativeFinish::token_limit;
+    impl_->publish();
+    std::cerr << "placement vision=" << vision_placement().device_id
+              << " matmuls=" << impl_->vision_observation.device_arithmetic
+              << " cpu_ops=" << impl_->vision_observation.cpu_ops
+              << " decoder=" << decoder_placement().device_id
+              << " matmuls=" << impl_->decoder_observation.device_arithmetic
+              << " cpu_ops=" << impl_->decoder_observation.cpu_ops << '\n';
     return result;
     } catch (const EngineError& error) {
       if (error.kind == EngineError::cancelled) throw;
