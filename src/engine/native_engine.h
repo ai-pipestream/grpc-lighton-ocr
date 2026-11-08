@@ -14,9 +14,17 @@ struct EngineError : std::runtime_error {
 struct NativeStep { uint32_t token, top_token; std::string piece; float logprob, top_logprob; };
 enum class NativeFinish { end_token, token_limit, output_limit, engine_error, deadline };
 struct NativeResult { std::string text, raw_text; uint32_t width = 0, height = 0, tokens = 0; std::vector<NativeStep> steps; NativeFinish finish = NativeFinish::end_token; };
+struct NativePlacement {
+  std::string backend, device_name, device_id;
+  bool runtime_verified = false;
+  bool cpu_compute = false;
+};
 class NativeEngine {
  public:
-  explicit NativeEngine(const std::string& directory);
+  explicit NativeEngine(const std::string& directory, const std::string& backend = "cpu",
+                        const std::string& device = "");
+  NativePlacement vision_placement() const;
+  NativePlacement decoder_placement() const;
   ~NativeEngine();
   NativeResult infer(std::string_view bytes, uint32_t max_tokens, float temperature,
                      uint32_t width, uint32_t height, std::function<bool()> cancelled);

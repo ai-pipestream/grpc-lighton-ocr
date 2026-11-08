@@ -38,9 +38,14 @@ FetchContent_Declare(grpc
   SYSTEM)
 FetchContent_MakeAvailable(grpc)
 
-# CPU-only, in-process backend. No downloads or subprocesses during inference.
+# In-process backends. CPU remains available in every build.
+option(LIGHTON_CUDA "Build the native CUDA backend" OFF)
+option(LIGHTON_SYCL "Build the native SYCL backend" OFF)
+option(LIGHTON_METAL "Build the native Metal backend" OFF)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(GGML_CUDA OFF CACHE BOOL "" FORCE)
+set(GGML_CUDA ${LIGHTON_CUDA} CACHE BOOL "" FORCE)
+set(GGML_SYCL ${LIGHTON_SYCL} CACHE BOOL "" FORCE)
+set(GGML_METAL ${LIGHTON_METAL} CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
@@ -68,6 +73,7 @@ FetchContent_Declare(llama
   GIT_TAG f3586e66bc916d672773d4a6505513ba91a3595c
   SYSTEM)
 FetchContent_MakeAvailable(llama)
+include(cmake/ObserveGgmlPlacement.cmake)
 
 set(LIGHTON_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(LIGHTON_PROTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/proto")
@@ -131,6 +137,14 @@ if(BUILD_TESTING)
   target_link_libraries(service_test PRIVATE lighton_service)
   lighton_warnings(service_test)
   add_test(NAME service_test COMMAND service_test)
+endif()
+
+if(BUILD_TESTING)
+  find_package(Python3 QUIET COMPONENTS Interpreter)
+  if(Python3_Interpreter_FOUND)
+    add_test(NAME hardware_rpc_checks_test COMMAND ${Python3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/tests/hardware_rpc_checks_test.py)
+  endif()
 endif()
 
 # Explicit qualification gate: supplied models are required, never skipped.

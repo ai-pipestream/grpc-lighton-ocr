@@ -47,6 +47,15 @@ Server start(lighton::Config config = {}) {
 }  // namespace
 
 int main() {
+  for (const auto& backend : {"cpu", "cuda", "sycl", "metal"}) {
+    bool rejected = false;
+    try { lighton::NativeEngine unavailable("/nonexistent-models", backend, "missing-native-device"); }
+    catch (const std::exception& error) {
+      rejected = std::string(error.what()).find("requested native backend/device unavailable") != std::string::npos;
+    }
+    expect(rejected, std::string(backend) + " unavailable device fails before reading model files");
+  }
+
   for (bool four_b : {false, true}) {
     lighton::Config unavailable;
     unavailable.models_dir = "/nonexistent-lighton-models";
