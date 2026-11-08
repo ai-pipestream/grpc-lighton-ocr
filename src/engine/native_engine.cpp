@@ -50,6 +50,7 @@ struct NativeEngine::Impl {
   std::string backend;
   struct Observation {
     uint64_t device_arithmetic = 0, cpu_arithmetic = 0, cpu_ops = 0;
+    ggml_backend_dev_t cpu_device = nullptr;
     void observe(ggml_backend_t backend, ggml_tensor* tensor, ggml_backend_dev_t requested) {
       // Copies/views are not model arithmetic. Device accessibility says
       // nothing about execution, especially for Metal/unified memory.
@@ -58,10 +59,12 @@ struct NativeEngine::Impl {
           tensor->op == GGML_OP_PERMUTE || tensor->op == GGML_OP_CPY ||
           tensor->op == GGML_OP_CONT || tensor->op == GGML_OP_DUP) return;
       const auto dev = ggml_backend_get_device(backend);
-      const bool cpu = ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU;
+      const std::string_view registry = ggml_backend_reg_name(ggml_backend_dev_backend_reg(dev));
+      // BLAS/Accelerate advertises ACCEL, but performs model math on CPU.
+      const bool cpu = ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU || registry == "BLAS";
       if (cpu) ++cpu_ops;
       if (tensor->op == GGML_OP_MUL_MAT || tensor->op == GGML_OP_MUL_MAT_ID) {
-        if (cpu) ++cpu_arithmetic;
+        if (cpu) { ++cpu_arithmetic; cpu_device = dev; }
         if (dev == requested) ++device_arithmetic;
       }
     }
@@ -77,8 +80,10 @@ struct NativeEngine::Impl {
   }
   bool vision_active = false;
   NativePlacement snapshot(const Observation& observation) const {
-    return {backend, ggml_backend_dev_description(device), ggml_backend_dev_name(device),
-            observation.device_arithmetic > 0, observation.cpu_ops > 0};
+    const auto actual = backend == "cpu" && observation.cpu_device ? observation.cpu_device : device;
+    return {backend, ggml_backend_dev_description(actual), ggml_backend_dev_name(actual),
+            backend == "cpu" ? observation.cpu_arithmetic > 0 : observation.device_arithmetic > 0,
+            observation.cpu_ops > 0};
   }
   void publish() {
     std::lock_guard lock(placement_mutex);
@@ -168,6 +173,7 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
     Control control{Clock::now() + std::chrono::seconds(60), std::move(cancelled)};
     impl_->active = &control;
     impl_->vision_observation = {}; impl_->decoder_observation = {};
+    struct PublishPlacement { Impl* state; ~PublishPlacement() { state->publish(); } } publish{impl_.get()};
     lighton_ggml_set_observer(Impl::observe, impl_.get());
     struct ClearObserver { ~ClearObserver() { lighton_ggml_set_observer(nullptr, nullptr); } } clear_observer;
     struct ClearActive { Impl* state; ~ClearActive() { state->active = nullptr; } } clear{impl_.get()};
