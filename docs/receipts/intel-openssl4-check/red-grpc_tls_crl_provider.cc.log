@@ -1,0 +1,4 @@
+/tmp/lighton-openssl-check/src/core/credentials/transport/tls/grpc_tls_crl_provider.cc:59:14: error: cannot initialize a variable of type 'X509_NAME *' (aka 'X509_name_st *') with an rvalue of type 'const X509_NAME *' (aka 'const X509_name_st *')
+   59 |   X509_NAME* issuer = X509_CRL_get_issuer(crl);
+      |              ^        ~~~~~~~~~~~~~~~~~~~~~~~~
+1 error generated.

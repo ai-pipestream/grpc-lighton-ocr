@@ -1,0 +1,3 @@
+fc05b16c3acb93e89f42faa52805135f77c5d40b97b6e0c8a823c8f9c1c0ebe2  /work/main/grpc-services/worktrees/grpc-asr-intel-sycl/build-intel/intel-lighton-rpc
+3b90f5ba07d542295a5e137e181187d1d43ac80a3c2993cc7fb9ab48187a0089  build-llama-intel/observed-ggml-backend.cpp
+4b77341ccfa9f338f9663e2aa687555b2cc612bf0dae3dee786faaf40c5eb6ba  build-llama-intel/bin/libggml-base.so

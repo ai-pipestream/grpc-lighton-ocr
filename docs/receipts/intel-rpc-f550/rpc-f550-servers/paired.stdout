@@ -1,0 +1,13 @@
+cpu run=0 seconds=11.155 content=PASS
+candidate run=0 seconds=6.822 content=PASS
+candidate run=1 seconds=1.930 content=PASS
+cpu run=1 seconds=8.209 content=PASS
+cpu run=2 seconds=8.507 content=PASS
+candidate run=2 seconds=1.999 content=PASS
+candidate run=3 seconds=1.945 content=PASS
+cpu run=3 seconds=9.050 content=PASS
+cpu run=4 seconds=9.877 content=PASS
+candidate run=4 seconds=1.939 content=PASS
+candidate run=5 seconds=1.853 content=PASS
+cpu run=5 seconds=9.973 content=PASS
+PASS: verified stage placement, repeated content and geometry; speedup=4.668

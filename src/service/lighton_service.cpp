@@ -1,6 +1,7 @@
 #include "service/lighton_service.h"
 
 #include <cstdint>
+#include <iostream>
 #include <unistd.h>
 #include <array>
 #include <condition_variable>
@@ -28,7 +29,10 @@ class TransportWatchdog {
   template<class F> bool call(F operation) {
     { std::lock_guard lock(mutex_); armed_ = true; ++generation_;
       deadline_ = std::chrono::steady_clock::now() + timeout_; cv_.notify_all(); }
+    const auto start = std::chrono::steady_clock::now();
     bool result = operation();
+    std::cerr << "service_phase transport ms=" << std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - start).count() << '\n';
     { std::lock_guard lock(mutex_); armed_ = false; ++generation_; cv_.notify_all(); }
     return result;
   }
@@ -70,10 +74,29 @@ grpc::Status exhausted(const std::string& message) {
   return grpc::Status(grpc::StatusCode::RESOURCE_EXHAUSTED, message);
 }
 
-void provenance(locrv1::InferenceProvenance* out) {
+void provenance(locrv1::InferenceProvenance* out, const NativeEngine* engine = nullptr,
+                const NativePlacementPair* request_placement = nullptr) {
   out->set_service_version("0.1.0"); out->set_backend_revision(kBackendRevision);
   out->set_model_revision(kModelRevision); out->set_model_sha256(kModelSha);
-  out->set_projector_sha256(kProjectorSha); out->set_device("cpu");
+  out->set_projector_sha256(kProjectorSha);
+  const auto pair = request_placement ? *request_placement : engine ? engine->placement() : NativePlacementPair{};
+  out->set_device((engine || request_placement) ? (pair.decoder.backend == "cpu" ? "cpu" :
+                           pair.decoder.device_id) : "unverified");
+  out->clear_stages();
+  if (engine || request_placement) {
+    for (const auto& [stage, placed] : {std::pair{locrv1::INFERENCE_STAGE_VISION, pair.vision},
+                                      std::pair{locrv1::INFERENCE_STAGE_DECODER, pair.decoder}}) {
+      auto* placement = out->add_stages();
+      placement->set_stage(stage);
+      placement->set_backend(placed.backend == "cuda" ? locrv1::COMPUTE_BACKEND_CUDA :
+          placed.backend == "sycl" ? locrv1::COMPUTE_BACKEND_SYCL :
+          placed.backend == "metal" ? locrv1::COMPUTE_BACKEND_METAL : locrv1::COMPUTE_BACKEND_CPU);
+      placement->set_device_name(placed.device_name);
+      placement->set_device_id(placed.device_id);
+      placement->set_runtime_verified(placed.runtime_verified);
+      if (placed.runtime_verified) placement->set_cpu_compute(placed.cpu_compute);
+    }
+  }
   std::array<char, 256> hostname{};
   if (::gethostname(hostname.data(), hostname.size() - 1) == 0) out->set_server_instance(hostname.data());
 }
@@ -107,6 +130,19 @@ void offset_refs(google::protobuf::Message* message, int texts, int pictures) {
 }
 
 }  // namespace
+
+void project_engine_error(const EngineError& error, uint32_t page_no,
+                          locrv1::PageFailure* failure) {
+  failure->Clear();
+  failure->set_page_no(page_no);
+  failure->set_code(error.kind == EngineError::bad_image ? locrv1::PAGE_FAILURE_CODE_BAD_IMAGE :
+      error.kind == EngineError::budget || error.kind == EngineError::deadline ?
+          locrv1::PAGE_FAILURE_CODE_RESOURCE_LIMIT : locrv1::PAGE_FAILURE_CODE_INFERENCE);
+  if (error.kind == EngineError::deadline)
+    failure->set_finish_reason(locrv1::FINISH_REASON_DEADLINE);
+  provenance(failure->mutable_provenance());
+  failure->set_message(error.what());
+}
 
 void project_native_result(const NativeResult& result, uint32_t page_no,
                            locrv1::LightonModel model, uint64_t first_step,
@@ -155,8 +191,8 @@ void project_native_result(const NativeResult& result, uint32_t page_no,
 LightOnOcrServiceImpl::LightOnOcrServiceImpl(Config config) : config_(std::move(config)) {
   if (!config_.diagnostic_no_engine) {
     if (config_.model != locrv1::LIGHTON_MODEL_0_8B)
-      throw std::invalid_argument("only CPU LightOnOCR-3-0.8B is qualified; 4B is unavailable");
-    engine_ = std::make_unique<NativeEngine>(config_.models_dir);
+      throw std::invalid_argument("only LightOnOCR-3-0.8B is available; 4B is unavailable");
+    engine_ = std::make_unique<NativeEngine>(config_.models_dir, config_.backend, config_.device);
   }
 }
 
@@ -165,7 +201,7 @@ grpc::Status LightOnOcrServiceImpl::GetServiceInfo(grpc::ServerContext* /*contex
                                                    locrv1::GetServiceInfoResponse* response) {
   response->set_listen_address(config_.listen_address);
   response->set_engine_loaded(engine_loaded());
-  if (engine_loaded()) provenance(response->mutable_provenance());
+  if (engine_loaded()) provenance(response->mutable_provenance(), engine_.get());
   response->set_model(config_.model);
   response->set_model_repo(model_repo(config_.model));
   return grpc::Status::OK;
@@ -236,7 +272,12 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
             auto result = engine_->infer(page.png(), options.max_tokens_per_page(),
                 options.temperature(), page.width_px(), page.height_px(),
                 [&] { return context->IsCancelled(); });
+            const auto project_start = std::chrono::steady_clock::now();
             project_native_result(result, page.page_no(), config_.model, steps, &event);
+            provenance(event.has_page_document() ? event.mutable_page_document()->mutable_provenance() :
+                       event.mutable_page_failure()->mutable_provenance(), nullptr, &result.placement);
+            std::cerr << "service_phase project ms=" << std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - project_start).count() << '\n';
             if (event.has_page_failure()) {
               ++failed;
               if (!transport.call([&] { return stream->Write(event); })) return {grpc::StatusCode::CANCELLED, "response stream closed"};
@@ -257,12 +298,8 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
             if (context->IsCancelled() || error.kind == EngineError::cancelled)
               return {grpc::StatusCode::CANCELLED, error.what()};
             if (error.kind == EngineError::busy) return exhausted(error.what());
-            auto* failure = event.mutable_page_failure(); failure->set_page_no(page.page_no());
-            failure->set_code(error.kind == EngineError::bad_image ? locrv1::PAGE_FAILURE_CODE_BAD_IMAGE :
-                error.kind == EngineError::budget ? locrv1::PAGE_FAILURE_CODE_RESOURCE_LIMIT :
-                locrv1::PAGE_FAILURE_CODE_INFERENCE);
-            provenance(failure->mutable_provenance());
-            failure->set_message(error.what()); ++failed;
+            project_engine_error(error, page.page_no(), event.mutable_page_failure());
+            ++failed;
           } catch (const std::exception&) {
             if (context->IsCancelled()) return {grpc::StatusCode::CANCELLED, "inference cancelled"};
             auto* failure = event.mutable_page_failure(); failure->set_page_no(page.page_no());

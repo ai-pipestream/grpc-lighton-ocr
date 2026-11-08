@@ -1,0 +1,20 @@
+{
+  "mode": "unobserved-regression",
+  "cycles": [
+    {
+      "repeat": 0,
+      "recovery_seconds": 2.109709586016834,
+      "cancel_exit_code": -2
+    },
+    {
+      "repeat": 1,
+      "recovery_seconds": 2.139263135031797,
+      "cancel_exit_code": -2
+    },
+    {
+      "repeat": 2,
+      "recovery_seconds": 2.0373681019991636,
+      "cancel_exit_code": -2
+    }
+  ]
+}
