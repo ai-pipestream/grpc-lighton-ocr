@@ -22,15 +22,38 @@ def payload(pages):
         for n in range(1, pages + 1)])
 
 
-def main():
+def validate_metadata(provenance, backend, unobserved_regression=False):
+    if not unobserved_regression:
+        checks.validate_placement(provenance, backend)
+        return
+    # This mode checks disabled observation, never accelerator execution.
+    stages = provenance.get("stages", [])
+    checks.require(len(stages) == 2 and {s.get("stage") for s in stages} == {
+        "INFERENCE_STAGE_VISION", "INFERENCE_STAGE_DECODER"}, "both stage identities required")
+    for stage in stages:
+        checks.require(stage.get("backend") == checks.BACKENDS[backend], "configured backend changed")
+        checks.require(bool(stage.get("deviceName")) and bool(stage.get("deviceId")), "device identity missing")
+        # Proto JSON omits the default false scalar.
+        checks.require(stage.get("runtimeVerified", False) is False,
+                       "observation-off regression must not claim verified execution")
+
+
+def argument_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--address", required=True)
     parser.add_argument("--backend", choices=("cpu", "cuda", "sycl", "metal"), required=True)
     parser.add_argument("--output", type=pathlib.Path, required=True)
     parser.add_argument("--repeats", type=int, default=3)
-    args = parser.parse_args()
+    parser.add_argument("--unobserved-regression", action="store_true",
+                        help="Require unverified stage metadata; NOT an offload qualification")
+    return parser
+
+
+def main():
+    args = argument_parser().parse_args()
     checks.require(args.repeats >= 3, "at least three cancellation repetitions required")
     args.output.mkdir(parents=True, exist_ok=False)
+    results = []
     for repeat in range(args.repeats):
         command = ["grpcurl", "-plaintext", "-max-time", "300", "-import-path",
                    str(checks.ROOT / "proto"), "-proto",
@@ -93,9 +116,15 @@ def main():
         (args.output / f"recovery-{repeat}.jsonl").write_text(recovered)
         info, _ = checks.rpc(args.address, "GetServiceInfo", "{}", 30)
         provenance = json.loads(info)["provenance"]
-        checks.validate_placement(provenance, args.backend)
+        (args.output / f"recovery-{repeat}-info.json").write_text(info)
+        validate_metadata(provenance, args.backend, args.unobserved_regression)
+        validate_metadata(first_page["pageDocument"]["provenance"], args.backend, args.unobserved_regression)
         checks.validate_output(checks.decode_events(recovered), provenance)
+        results.append({"repeat": repeat, "recovery_seconds": seconds, "cancel_exit_code": exit_code})
         print(f"PASS valid-stream cancellation/recovery {repeat}: {seconds:.3f}s", flush=True)
+    (args.output / "results.json").write_text(json.dumps({
+        "mode": "unobserved-regression" if args.unobserved_regression else "verified-placement",
+        "cycles": results}, indent=2) + "\n")
 
 
 if __name__ == "__main__":
