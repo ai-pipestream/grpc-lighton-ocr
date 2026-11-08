@@ -14,8 +14,8 @@ RUN --mount=type=cache,id=lighton-cuda13.2-ubuntu24-gcc14-grpc1.83-f3586e66-${TA
     cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
     -DLIGHTON_CUDA=ON -DBUILD_TESTING=ON -DLIGHTON_QUALIFICATION_MODELS= -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
     -DCMAKE_CUDA_HOST_COMPILER=g++-14 -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
-    && cmake --build /build --target grpc-lighton-ocr-server markdown_test service_test --parallel 2 \
-    && ctest --test-dir /build -R "^(markdown_test|service_test|hardware_rpc_checks_test)$" --output-on-failure \
+    && cmake --build /build --parallel 2 \
+    && ctest --test-dir /build --output-on-failure \
     && mkdir -p /out/lib \
     && cp /build/grpc-lighton-ocr-server /out/ \
     && cp /build/_deps/llama-src/LICENSE /out/llama-LICENSE \
