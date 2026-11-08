@@ -4,6 +4,8 @@ ARG ONEAPI_IMAGE=intel/oneapi-basekit:2025.3.2-0-devel-ubuntu24.04@sha256:79a5e3
 ARG UBUNTU_IMAGE=ubuntu:26.10@sha256:262df65c0ec6bf8d9dcc87454f4330a05fae4b97825f45854af3b136666584c2
 FROM ${ONEAPI_IMAGE} AS oneapi
 FROM ${UBUNTU_IMAGE} AS build
+ARG BUILD_JOBS=2
+RUN case "$BUILD_JOBS" in ''|*[!0-9]*|0*) echo "BUILD_JOBS must be a positive integer" >&2; exit 1;; esac
 COPY --from=oneapi /opt/intel/oneapi /opt/intel/oneapi
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates cmake g++ git ninja-build pkg-config libssl-dev libze-dev python3 \
@@ -11,11 +13,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 SHELL ["/bin/bash", "-c"]
 WORKDIR /src
 COPY . .
-ARG BUILD_JOBS=2
 RUN set -e; source /opt/intel/oneapi/setvars.sh >/dev/null 2>&1 \
     && cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx \
-      -DLIGHTON_SYCL=ON -DBUILD_TESTING=ON -DLIGHTON_QUALIFICATION_MODELS= \
+      -DgRPC_SSL_PROVIDER=package \
+      -DLIGHTON_SYCL=ON -DBUILD_TESTING=ON -DLIGHTON_QUALIFICATION_MODELS=
+RUN set -e; source /opt/intel/oneapi/setvars.sh >/dev/null 2>&1 \
     && cmake --build /build --parallel "$BUILD_JOBS" \
     && ctest --test-dir /build --output-on-failure
 FROM ${UBUNTU_IMAGE}
