@@ -1,0 +1,3 @@
+repeat=0 elapsed_us=49199991 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=1

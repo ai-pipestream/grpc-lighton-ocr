@@ -1,0 +1,19 @@
+repeat=0 elapsed_us=7342539 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+repeat=1 elapsed_us=1065395 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+repeat=2 elapsed_us=1091347 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+repeat=3 elapsed_us=1019034 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+repeat=4 elapsed_us=1048921 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+repeat=5 elapsed_us=988167 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+placement backend=sycl device=Intel(R) Arc(TM) Pro B70 Graphics id=SYCL0 verified=1 cpu_compute=0
+PASS native engine text/basic-box/repeats/pre-cancel/recovery; RPC is separate

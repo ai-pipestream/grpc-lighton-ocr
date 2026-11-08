@@ -1,0 +1,19 @@
+repeat=0 elapsed_us=9098485 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+repeat=1 elapsed_us=13509335 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+repeat=2 elapsed_us=17200522 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+repeat=3 elapsed_us=12302502 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+repeat=4 elapsed_us=13746908 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+repeat=5 elapsed_us=14399113 text=![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+placement backend=cpu device=AMD Ryzen 9 9950X 16-Core Processor id=CPU verified=1 cpu_compute=1
+PASS native engine text/basic-box/repeats/pre-cancel/recovery; RPC is separate
