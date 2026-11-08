@@ -1,0 +1,1527 @@
+{
+  "pageDocument": {
+    "pageNo": 1,
+    "document": {
+      "schemaName": "docling_document_v2",
+      "version": "1.10.0",
+      "name": "page-1",
+      "body": {
+        "selfRef": "#/body",
+        "children": [
+          {
+            "ref": "#/texts/0"
+          }
+        ],
+        "contentLayer": "CONTENT_LAYER_BODY"
+      },
+      "texts": [
+        {
+          "text": {
+            "base": {
+              "selfRef": "#/texts/0",
+              "parent": {
+                "ref": "#/body"
+              },
+              "contentLayer": "CONTENT_LAYER_BODY",
+              "label": "DOC_ITEM_LABEL_TEXT",
+              "prov": [
+                {
+                  "pageNo": 1,
+                  "bbox": {
+                    "l": 39,
+                    "t": 31.5,
+                    "r": 457,
+                    "b": 207.6,
+                    "coordOrigin": "COORD_ORIGIN_TOPLEFT"
+                  },
+                  "charspan": {
+                    "end": 34
+                  }
+                }
+              ],
+              "orig": "INVOICE 1042 Total USD 125.00 Paid",
+              "text": "INVOICE 1042 Total USD 125.00 Paid",
+              "source": [
+                {
+                  "collector": {
+                    "collector": "grpc-lighton-ocr",
+                    "model": "lightonai/LightOnOCR-3-0.8B",
+                    "version": "36d8636925327c671bd8e479c517a004f7566bd9"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "pages": {
+        "1": {
+          "size": {
+            "width": 1000,
+            "height": 300
+          },
+          "pageNo": 1
+        }
+      },
+      "furniture": {
+        "selfRef": "#/furniture",
+        "contentLayer": "CONTENT_LAYER_FURNITURE"
+      },
+      "generationTraces": [
+        {
+          "pageNo": 1,
+          "steps": [
+            {
+              "token": 20077,
+              "piece": "![",
+              "logprob": -2.5115372e-05,
+              "modelToken": 20077,
+              "modelLogprob": -2.5115372e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 1272,
+              "piece": "text",
+              "logprob": -0.23578523,
+              "modelToken": 1272,
+              "modelLogprob": -0.23578523,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 9251,
+              "piece": "](",
+              "logprob": -2.846279e-05,
+              "modelToken": 9251,
+              "modelLogprob": -2.846279e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 18,
+              "piece": "3",
+              "logprob": -0.6254037,
+              "modelToken": 18,
+              "modelLogprob": -0.6254037,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 24,
+              "piece": "9",
+              "logprob": -0.7036162,
+              "modelToken": 24,
+              "modelLogprob": -0.7036162,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 11,
+              "piece": ",",
+              "logprob": -5.8501115e-07,
+              "modelToken": 11,
+              "modelLogprob": -5.8501115e-07,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 16,
+              "piece": "1",
+              "logprob": -0.33548516,
+              "modelToken": 16,
+              "modelLogprob": -0.33548516,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 15,
+              "piece": "0",
+              "logprob": -0.57744765,
+              "modelToken": 15,
+              "modelLogprob": -0.57744765,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 20,
+              "piece": "5",
+              "logprob": -1.9109755,
+              "modelToken": 20,
+              "modelLogprob": -1.9109755,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 11,
+              "piece": ",",
+              "logprob": -3.9890776e-07,
+              "modelToken": 11,
+              "modelLogprob": -3.9890776e-07,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 19,
+              "piece": "4",
+              "logprob": -0.0015760768,
+              "modelToken": 19,
+              "modelLogprob": -0.0015760768,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 20,
+              "piece": "5",
+              "logprob": -0.024456706,
+              "modelToken": 20,
+              "modelLogprob": -0.024456706,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 22,
+              "piece": "7",
+              "logprob": -0.933902,
+              "modelToken": 22,
+              "modelLogprob": -0.933902,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 11,
+              "piece": ",",
+              "logprob": -1.0010915e-08,
+              "modelToken": 11,
+              "modelLogprob": -1.0010915e-08,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 21,
+              "piece": "6",
+              "logprob": -0.09465138,
+              "modelToken": 21,
+              "modelLogprob": -0.09465138,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 24,
+              "piece": "9",
+              "logprob": -0.24031158,
+              "modelToken": 24,
+              "modelLogprob": -0.24031158,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 17,
+              "piece": "2",
+              "logprob": -1.9152032,
+              "modelToken": 17,
+              "modelLogprob": -1.9152032,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 8,
+              "piece": ")",
+              "logprob": -1.1162213e-07,
+              "modelToken": 8,
+              "modelLogprob": -1.1162213e-07,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 1897,
+              "piece": "ĠIN",
+              "logprob": -0.00086620956,
+              "modelToken": 1897,
+              "modelLogprob": -0.00086620956,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 75249,
+              "piece": "VOICE",
+              "logprob": -3.7180491e-06,
+              "modelToken": 75249,
+              "modelLogprob": -3.7180491e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 220,
+              "piece": "Ġ",
+              "logprob": -9.5563e-06,
+              "modelToken": 220,
+              "modelLogprob": -9.5563e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 16,
+              "piece": "1",
+              "logprob": -1.8511013e-06,
+              "modelToken": 16,
+              "modelLogprob": -1.8511013e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 15,
+              "piece": "0",
+              "logprob": -1.5270141e-05,
+              "modelToken": 15,
+              "modelLogprob": -1.5270141e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 19,
+              "piece": "4",
+              "logprob": -1.40944885e-05,
+              "modelToken": 19,
+              "modelLogprob": -1.40944885e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 17,
+              "piece": "2",
+              "logprob": -6.395314e-06,
+              "modelToken": 17,
+              "modelLogprob": -6.395314e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 10342,
+              "piece": "ĠTotal",
+              "logprob": -0.0034135473,
+              "modelToken": 10342,
+              "modelLogprob": -0.0034135473,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 18954,
+              "piece": "ĠUSD",
+              "logprob": -1.3307561e-05,
+              "modelToken": 18954,
+              "modelLogprob": -1.3307561e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 220,
+              "piece": "Ġ",
+              "logprob": -2.492764e-05,
+              "modelToken": 220,
+              "modelLogprob": -2.492764e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 16,
+              "piece": "1",
+              "logprob": -1.5023654e-06,
+              "modelToken": 16,
+              "modelLogprob": -1.5023654e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 17,
+              "piece": "2",
+              "logprob": -9.742566e-06,
+              "modelToken": 17,
+              "modelLogprob": -9.742566e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 20,
+              "piece": "5",
+              "logprob": -3.0392964e-06,
+              "modelToken": 20,
+              "modelLogprob": -3.0392964e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 13,
+              "piece": ".",
+              "logprob": -1.8125527e-07,
+              "modelToken": 13,
+              "modelLogprob": -1.8125527e-07,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 15,
+              "piece": "0",
+              "logprob": -9.489085e-07,
+              "modelToken": 15,
+              "modelLogprob": -9.489085e-07,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 15,
+              "piece": "0",
+              "logprob": -7.902147e-06,
+              "modelToken": 15,
+              "modelLogprob": -7.902147e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 52267,
+              "piece": "ĠPaid",
+              "logprob": -0.0015311332,
+              "modelToken": 52267,
+              "modelLogprob": -0.0015311332,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 248046,
+              "piece": "\u003c|im_end|\u003e",
+              "logprob": -0.0069731,
+              "modelToken": 248046,
+              "modelLogprob": -0.0069731,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            }
+          ],
+          "text": "![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid\u003c|im_end|\u003e",
+          "source": {
+            "collector": "grpc-lighton-ocr",
+            "model": "lightonai/LightOnOCR-3-0.8B",
+            "version": "36d8636925327c671bd8e479c517a004f7566bd9"
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "serviceVersion": "0.1.0",
+      "backendRevision": "f3586e66bc916d672773d4a6505513ba91a3595c",
+      "modelRevision": "36d8636925327c671bd8e479c517a004f7566bd9",
+      "modelSha256": "a73ab10d787c68cbfc518f51bfe044abcfb9dc27ce9c457f2068bf7d3ee0241d",
+      "projectorSha256": "a0af0fe69443cfe35edd1294466d0f1d9780682177a101944d0fe8a9f5b72bd4",
+      "device": "SYCL0",
+      "serverInstance": "krick-1",
+      "stages": [
+        {
+          "stage": "INFERENCE_STAGE_VISION",
+          "backend": "COMPUTE_BACKEND_SYCL",
+          "deviceName": "Intel(R) Arc(TM) Pro B70 Graphics",
+          "deviceId": "SYCL0",
+          "runtimeVerified": true,
+          "cpuCompute": false
+        },
+        {
+          "stage": "INFERENCE_STAGE_DECODER",
+          "backend": "COMPUTE_BACKEND_SYCL",
+          "deviceName": "Intel(R) Arc(TM) Pro B70 Graphics",
+          "deviceId": "SYCL0",
+          "runtimeVerified": true,
+          "cpuCompute": false
+        }
+      ]
+    },
+    "finishReason": "FINISH_REASON_END_TOKEN"
+  }
+}
+{
+  "pageDocument": {
+    "pageNo": 2,
+    "document": {
+      "schemaName": "docling_document_v2",
+      "version": "1.10.0",
+      "name": "page-2",
+      "body": {
+        "selfRef": "#/body",
+        "children": [
+          {
+            "ref": "#/texts/0"
+          }
+        ],
+        "contentLayer": "CONTENT_LAYER_BODY"
+      },
+      "texts": [
+        {
+          "text": {
+            "base": {
+              "selfRef": "#/texts/0",
+              "parent": {
+                "ref": "#/body"
+              },
+              "contentLayer": "CONTENT_LAYER_BODY",
+              "label": "DOC_ITEM_LABEL_TEXT",
+              "prov": [
+                {
+                  "pageNo": 2,
+                  "bbox": {
+                    "l": 39,
+                    "t": 31.5,
+                    "r": 457,
+                    "b": 207.6,
+                    "coordOrigin": "COORD_ORIGIN_TOPLEFT"
+                  },
+                  "charspan": {
+                    "end": 34
+                  }
+                }
+              ],
+              "orig": "INVOICE 1042 Total USD 125.00 Paid",
+              "text": "INVOICE 1042 Total USD 125.00 Paid",
+              "source": [
+                {
+                  "collector": {
+                    "collector": "grpc-lighton-ocr",
+                    "model": "lightonai/LightOnOCR-3-0.8B",
+                    "version": "36d8636925327c671bd8e479c517a004f7566bd9"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "pages": {
+        "2": {
+          "size": {
+            "width": 1000,
+            "height": 300
+          },
+          "pageNo": 2
+        }
+      },
+      "furniture": {
+        "selfRef": "#/furniture",
+        "contentLayer": "CONTENT_LAYER_FURNITURE"
+      },
+      "generationTraces": [
+        {
+          "pageNo": 2,
+          "firstStep": "36",
+          "steps": [
+            {
+              "token": 20077,
+              "piece": "![",
+              "logprob": -2.5328332e-05,
+              "modelToken": 20077,
+              "modelLogprob": -2.5328332e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 1272,
+              "piece": "text",
+              "logprob": -0.23739763,
+              "modelToken": 1272,
+              "modelLogprob": -0.23739763,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 9251,
+              "piece": "](",
+              "logprob": -3.053189e-05,
+              "modelToken": 9251,
+              "modelLogprob": -3.053189e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 18,
+              "piece": "3",
+              "logprob": -0.6235526,
+              "modelToken": 18,
+              "modelLogprob": -0.6235526,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 24,
+              "piece": "9",
+              "logprob": -0.70474327,
+              "modelToken": 24,
+              "modelLogprob": -0.70474327,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 11,
+              "piece": ",",
+              "logprob": -5.9621226e-07,
+              "modelToken": 11,
+              "modelLogprob": -5.9621226e-07,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 16,
+              "piece": "1",
+              "logprob": -0.33817974,
+              "modelToken": 16,
+              "modelLogprob": -0.33817974,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 15,
+              "piece": "0",
+              "logprob": -0.58191323,
+              "modelToken": 15,
+              "modelLogprob": -0.58191323,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 20,
+              "piece": "5",
+              "logprob": -1.9146197,
+              "modelToken": 20,
+              "modelLogprob": -1.9146197,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 11,
+              "piece": ",",
+              "logprob": -4.1003938e-07,
+              "modelToken": 11,
+              "modelLogprob": -4.1003938e-07,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 19,
+              "piece": "4",
+              "logprob": -0.0015410546,
+              "modelToken": 19,
+              "modelLogprob": -0.0015410546,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 20,
+              "piece": "5",
+              "logprob": -0.024046244,
+              "modelToken": 20,
+              "modelLogprob": -0.024046244,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 22,
+              "piece": "7",
+              "logprob": -0.93166035,
+              "modelToken": 22,
+              "modelLogprob": -0.93166035,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 11,
+              "piece": ",",
+              "logprob": -1.0083937e-08,
+              "modelToken": 11,
+              "modelLogprob": -1.0083937e-08,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 21,
+              "piece": "6",
+              "logprob": -0.0950959,
+              "modelToken": 21,
+              "modelLogprob": -0.0950959,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 24,
+              "piece": "9",
+              "logprob": -0.23921956,
+              "modelToken": 24,
+              "modelLogprob": -0.23921956,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 17,
+              "piece": "2",
+              "logprob": -1.9204074,
+              "modelToken": 17,
+              "modelLogprob": -1.9204074,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 8,
+              "piece": ")",
+              "logprob": -1.10942004e-07,
+              "modelToken": 8,
+              "modelLogprob": -1.10942004e-07,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 1897,
+              "piece": "ĠIN",
+              "logprob": -0.0008775774,
+              "modelToken": 1897,
+              "modelLogprob": -0.0008775774,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 75249,
+              "piece": "VOICE",
+              "logprob": -3.7385819e-06,
+              "modelToken": 75249,
+              "modelLogprob": -3.7385819e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 220,
+              "piece": "Ġ",
+              "logprob": -9.875711e-06,
+              "modelToken": 220,
+              "modelLogprob": -9.875711e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 16,
+              "piece": "1",
+              "logprob": -1.8926224e-06,
+              "modelToken": 16,
+              "modelLogprob": -1.8926224e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 15,
+              "piece": "0",
+              "logprob": -1.556688e-05,
+              "modelToken": 15,
+              "modelLogprob": -1.556688e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 19,
+              "piece": "4",
+              "logprob": -1.4645202e-05,
+              "modelToken": 19,
+              "modelLogprob": -1.4645202e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 17,
+              "piece": "2",
+              "logprob": -6.615768e-06,
+              "modelToken": 17,
+              "modelLogprob": -6.615768e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 10342,
+              "piece": "ĠTotal",
+              "logprob": -0.0034148302,
+              "modelToken": 10342,
+              "modelLogprob": -0.0034148302,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 18954,
+              "piece": "ĠUSD",
+              "logprob": -1.3380567e-05,
+              "modelToken": 18954,
+              "modelLogprob": -1.3380567e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 220,
+              "piece": "Ġ",
+              "logprob": -2.4899373e-05,
+              "modelToken": 220,
+              "modelLogprob": -2.4899373e-05,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 16,
+              "piece": "1",
+              "logprob": -1.5166313e-06,
+              "modelToken": 16,
+              "modelLogprob": -1.5166313e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 17,
+              "piece": "2",
+              "logprob": -9.921868e-06,
+              "modelToken": 17,
+              "modelLogprob": -9.921868e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 20,
+              "piece": "5",
+              "logprob": -3.0178323e-06,
+              "modelToken": 20,
+              "modelLogprob": -3.0178323e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 13,
+              "piece": ".",
+              "logprob": -1.8017448e-07,
+              "modelToken": 13,
+              "modelLogprob": -1.8017448e-07,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 15,
+              "piece": "0",
+              "logprob": -9.684949e-07,
+              "modelToken": 15,
+              "modelLogprob": -9.684949e-07,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 15,
+              "piece": "0",
+              "logprob": -7.896089e-06,
+              "modelToken": 15,
+              "modelLogprob": -7.896089e-06,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 52267,
+              "piece": "ĠPaid",
+              "logprob": -0.0015231465,
+              "modelToken": 52267,
+              "modelLogprob": -0.0015231465,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            },
+            {
+              "token": 248046,
+              "piece": "\u003c|im_end|\u003e",
+              "logprob": -0.0071512507,
+              "modelToken": 248046,
+              "modelLogprob": -0.0071512507,
+              "intervention": "GENERATION_INTERVENTION_NONE"
+            }
+          ],
+          "text": "![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid\u003c|im_end|\u003e",
+          "source": {
+            "collector": "grpc-lighton-ocr",
+            "model": "lightonai/LightOnOCR-3-0.8B",
+            "version": "36d8636925327c671bd8e479c517a004f7566bd9"
+          }
+        }
+      ]
+    },
+    "provenance": {
+      "serviceVersion": "0.1.0",
+      "backendRevision": "f3586e66bc916d672773d4a6505513ba91a3595c",
+      "modelRevision": "36d8636925327c671bd8e479c517a004f7566bd9",
+      "modelSha256": "a73ab10d787c68cbfc518f51bfe044abcfb9dc27ce9c457f2068bf7d3ee0241d",
+      "projectorSha256": "a0af0fe69443cfe35edd1294466d0f1d9780682177a101944d0fe8a9f5b72bd4",
+      "device": "SYCL0",
+      "serverInstance": "krick-1",
+      "stages": [
+        {
+          "stage": "INFERENCE_STAGE_VISION",
+          "backend": "COMPUTE_BACKEND_SYCL",
+          "deviceName": "Intel(R) Arc(TM) Pro B70 Graphics",
+          "deviceId": "SYCL0",
+          "runtimeVerified": true,
+          "cpuCompute": false
+        },
+        {
+          "stage": "INFERENCE_STAGE_DECODER",
+          "backend": "COMPUTE_BACKEND_SYCL",
+          "deviceName": "Intel(R) Arc(TM) Pro B70 Graphics",
+          "deviceId": "SYCL0",
+          "runtimeVerified": true,
+          "cpuCompute": false
+        }
+      ]
+    },
+    "finishReason": "FINISH_REASON_END_TOKEN"
+  }
+}
+{
+  "document": {
+    "schemaName": "docling_document_v2",
+    "version": "1.10.0",
+    "name": "page-2",
+    "body": {
+      "selfRef": "#/body",
+      "children": [
+        {
+          "ref": "#/texts/0"
+        },
+        {
+          "ref": "#/texts/1"
+        }
+      ],
+      "contentLayer": "CONTENT_LAYER_BODY"
+    },
+    "texts": [
+      {
+        "text": {
+          "base": {
+            "selfRef": "#/texts/0",
+            "parent": {
+              "ref": "#/body"
+            },
+            "contentLayer": "CONTENT_LAYER_BODY",
+            "label": "DOC_ITEM_LABEL_TEXT",
+            "prov": [
+              {
+                "pageNo": 1,
+                "bbox": {
+                  "l": 39,
+                  "t": 31.5,
+                  "r": 457,
+                  "b": 207.6,
+                  "coordOrigin": "COORD_ORIGIN_TOPLEFT"
+                },
+                "charspan": {
+                  "end": 34
+                }
+              }
+            ],
+            "orig": "INVOICE 1042 Total USD 125.00 Paid",
+            "text": "INVOICE 1042 Total USD 125.00 Paid",
+            "source": [
+              {
+                "collector": {
+                  "collector": "grpc-lighton-ocr",
+                  "model": "lightonai/LightOnOCR-3-0.8B",
+                  "version": "36d8636925327c671bd8e479c517a004f7566bd9"
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "text": {
+          "base": {
+            "selfRef": "#/texts/1",
+            "parent": {
+              "ref": "#/body"
+            },
+            "contentLayer": "CONTENT_LAYER_BODY",
+            "label": "DOC_ITEM_LABEL_TEXT",
+            "prov": [
+              {
+                "pageNo": 2,
+                "bbox": {
+                  "l": 39,
+                  "t": 31.5,
+                  "r": 457,
+                  "b": 207.6,
+                  "coordOrigin": "COORD_ORIGIN_TOPLEFT"
+                },
+                "charspan": {
+                  "end": 34
+                }
+              }
+            ],
+            "orig": "INVOICE 1042 Total USD 125.00 Paid",
+            "text": "INVOICE 1042 Total USD 125.00 Paid",
+            "source": [
+              {
+                "collector": {
+                  "collector": "grpc-lighton-ocr",
+                  "model": "lightonai/LightOnOCR-3-0.8B",
+                  "version": "36d8636925327c671bd8e479c517a004f7566bd9"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "pages": {
+      "1": {
+        "size": {
+          "width": 1000,
+          "height": 300
+        },
+        "pageNo": 1
+      },
+      "2": {
+        "size": {
+          "width": 1000,
+          "height": 300
+        },
+        "pageNo": 2
+      }
+    },
+    "furniture": {
+      "selfRef": "#/furniture",
+      "contentLayer": "CONTENT_LAYER_FURNITURE"
+    },
+    "generationTraces": [
+      {
+        "pageNo": 1,
+        "steps": [
+          {
+            "token": 20077,
+            "piece": "![",
+            "logprob": -2.5115372e-05,
+            "modelToken": 20077,
+            "modelLogprob": -2.5115372e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 1272,
+            "piece": "text",
+            "logprob": -0.23578523,
+            "modelToken": 1272,
+            "modelLogprob": -0.23578523,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 9251,
+            "piece": "](",
+            "logprob": -2.846279e-05,
+            "modelToken": 9251,
+            "modelLogprob": -2.846279e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 18,
+            "piece": "3",
+            "logprob": -0.6254037,
+            "modelToken": 18,
+            "modelLogprob": -0.6254037,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 24,
+            "piece": "9",
+            "logprob": -0.7036162,
+            "modelToken": 24,
+            "modelLogprob": -0.7036162,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 11,
+            "piece": ",",
+            "logprob": -5.8501115e-07,
+            "modelToken": 11,
+            "modelLogprob": -5.8501115e-07,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 16,
+            "piece": "1",
+            "logprob": -0.33548516,
+            "modelToken": 16,
+            "modelLogprob": -0.33548516,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 15,
+            "piece": "0",
+            "logprob": -0.57744765,
+            "modelToken": 15,
+            "modelLogprob": -0.57744765,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 20,
+            "piece": "5",
+            "logprob": -1.9109755,
+            "modelToken": 20,
+            "modelLogprob": -1.9109755,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 11,
+            "piece": ",",
+            "logprob": -3.9890776e-07,
+            "modelToken": 11,
+            "modelLogprob": -3.9890776e-07,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 19,
+            "piece": "4",
+            "logprob": -0.0015760768,
+            "modelToken": 19,
+            "modelLogprob": -0.0015760768,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 20,
+            "piece": "5",
+            "logprob": -0.024456706,
+            "modelToken": 20,
+            "modelLogprob": -0.024456706,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 22,
+            "piece": "7",
+            "logprob": -0.933902,
+            "modelToken": 22,
+            "modelLogprob": -0.933902,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 11,
+            "piece": ",",
+            "logprob": -1.0010915e-08,
+            "modelToken": 11,
+            "modelLogprob": -1.0010915e-08,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 21,
+            "piece": "6",
+            "logprob": -0.09465138,
+            "modelToken": 21,
+            "modelLogprob": -0.09465138,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 24,
+            "piece": "9",
+            "logprob": -0.24031158,
+            "modelToken": 24,
+            "modelLogprob": -0.24031158,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 17,
+            "piece": "2",
+            "logprob": -1.9152032,
+            "modelToken": 17,
+            "modelLogprob": -1.9152032,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 8,
+            "piece": ")",
+            "logprob": -1.1162213e-07,
+            "modelToken": 8,
+            "modelLogprob": -1.1162213e-07,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 1897,
+            "piece": "ĠIN",
+            "logprob": -0.00086620956,
+            "modelToken": 1897,
+            "modelLogprob": -0.00086620956,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 75249,
+            "piece": "VOICE",
+            "logprob": -3.7180491e-06,
+            "modelToken": 75249,
+            "modelLogprob": -3.7180491e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 220,
+            "piece": "Ġ",
+            "logprob": -9.5563e-06,
+            "modelToken": 220,
+            "modelLogprob": -9.5563e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 16,
+            "piece": "1",
+            "logprob": -1.8511013e-06,
+            "modelToken": 16,
+            "modelLogprob": -1.8511013e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 15,
+            "piece": "0",
+            "logprob": -1.5270141e-05,
+            "modelToken": 15,
+            "modelLogprob": -1.5270141e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 19,
+            "piece": "4",
+            "logprob": -1.40944885e-05,
+            "modelToken": 19,
+            "modelLogprob": -1.40944885e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 17,
+            "piece": "2",
+            "logprob": -6.395314e-06,
+            "modelToken": 17,
+            "modelLogprob": -6.395314e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 10342,
+            "piece": "ĠTotal",
+            "logprob": -0.0034135473,
+            "modelToken": 10342,
+            "modelLogprob": -0.0034135473,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 18954,
+            "piece": "ĠUSD",
+            "logprob": -1.3307561e-05,
+            "modelToken": 18954,
+            "modelLogprob": -1.3307561e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 220,
+            "piece": "Ġ",
+            "logprob": -2.492764e-05,
+            "modelToken": 220,
+            "modelLogprob": -2.492764e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 16,
+            "piece": "1",
+            "logprob": -1.5023654e-06,
+            "modelToken": 16,
+            "modelLogprob": -1.5023654e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 17,
+            "piece": "2",
+            "logprob": -9.742566e-06,
+            "modelToken": 17,
+            "modelLogprob": -9.742566e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 20,
+            "piece": "5",
+            "logprob": -3.0392964e-06,
+            "modelToken": 20,
+            "modelLogprob": -3.0392964e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 13,
+            "piece": ".",
+            "logprob": -1.8125527e-07,
+            "modelToken": 13,
+            "modelLogprob": -1.8125527e-07,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 15,
+            "piece": "0",
+            "logprob": -9.489085e-07,
+            "modelToken": 15,
+            "modelLogprob": -9.489085e-07,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 15,
+            "piece": "0",
+            "logprob": -7.902147e-06,
+            "modelToken": 15,
+            "modelLogprob": -7.902147e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 52267,
+            "piece": "ĠPaid",
+            "logprob": -0.0015311332,
+            "modelToken": 52267,
+            "modelLogprob": -0.0015311332,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 248046,
+            "piece": "\u003c|im_end|\u003e",
+            "logprob": -0.0069731,
+            "modelToken": 248046,
+            "modelLogprob": -0.0069731,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          }
+        ],
+        "text": "![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid\u003c|im_end|\u003e",
+        "source": {
+          "collector": "grpc-lighton-ocr",
+          "model": "lightonai/LightOnOCR-3-0.8B",
+          "version": "36d8636925327c671bd8e479c517a004f7566bd9"
+        }
+      },
+      {
+        "pageNo": 2,
+        "firstStep": "36",
+        "steps": [
+          {
+            "token": 20077,
+            "piece": "![",
+            "logprob": -2.5328332e-05,
+            "modelToken": 20077,
+            "modelLogprob": -2.5328332e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 1272,
+            "piece": "text",
+            "logprob": -0.23739763,
+            "modelToken": 1272,
+            "modelLogprob": -0.23739763,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 9251,
+            "piece": "](",
+            "logprob": -3.053189e-05,
+            "modelToken": 9251,
+            "modelLogprob": -3.053189e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 18,
+            "piece": "3",
+            "logprob": -0.6235526,
+            "modelToken": 18,
+            "modelLogprob": -0.6235526,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 24,
+            "piece": "9",
+            "logprob": -0.70474327,
+            "modelToken": 24,
+            "modelLogprob": -0.70474327,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 11,
+            "piece": ",",
+            "logprob": -5.9621226e-07,
+            "modelToken": 11,
+            "modelLogprob": -5.9621226e-07,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 16,
+            "piece": "1",
+            "logprob": -0.33817974,
+            "modelToken": 16,
+            "modelLogprob": -0.33817974,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 15,
+            "piece": "0",
+            "logprob": -0.58191323,
+            "modelToken": 15,
+            "modelLogprob": -0.58191323,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 20,
+            "piece": "5",
+            "logprob": -1.9146197,
+            "modelToken": 20,
+            "modelLogprob": -1.9146197,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 11,
+            "piece": ",",
+            "logprob": -4.1003938e-07,
+            "modelToken": 11,
+            "modelLogprob": -4.1003938e-07,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 19,
+            "piece": "4",
+            "logprob": -0.0015410546,
+            "modelToken": 19,
+            "modelLogprob": -0.0015410546,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 20,
+            "piece": "5",
+            "logprob": -0.024046244,
+            "modelToken": 20,
+            "modelLogprob": -0.024046244,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 22,
+            "piece": "7",
+            "logprob": -0.93166035,
+            "modelToken": 22,
+            "modelLogprob": -0.93166035,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 11,
+            "piece": ",",
+            "logprob": -1.0083937e-08,
+            "modelToken": 11,
+            "modelLogprob": -1.0083937e-08,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 21,
+            "piece": "6",
+            "logprob": -0.0950959,
+            "modelToken": 21,
+            "modelLogprob": -0.0950959,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 24,
+            "piece": "9",
+            "logprob": -0.23921956,
+            "modelToken": 24,
+            "modelLogprob": -0.23921956,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 17,
+            "piece": "2",
+            "logprob": -1.9204074,
+            "modelToken": 17,
+            "modelLogprob": -1.9204074,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 8,
+            "piece": ")",
+            "logprob": -1.10942004e-07,
+            "modelToken": 8,
+            "modelLogprob": -1.10942004e-07,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 1897,
+            "piece": "ĠIN",
+            "logprob": -0.0008775774,
+            "modelToken": 1897,
+            "modelLogprob": -0.0008775774,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 75249,
+            "piece": "VOICE",
+            "logprob": -3.7385819e-06,
+            "modelToken": 75249,
+            "modelLogprob": -3.7385819e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 220,
+            "piece": "Ġ",
+            "logprob": -9.875711e-06,
+            "modelToken": 220,
+            "modelLogprob": -9.875711e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 16,
+            "piece": "1",
+            "logprob": -1.8926224e-06,
+            "modelToken": 16,
+            "modelLogprob": -1.8926224e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 15,
+            "piece": "0",
+            "logprob": -1.556688e-05,
+            "modelToken": 15,
+            "modelLogprob": -1.556688e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 19,
+            "piece": "4",
+            "logprob": -1.4645202e-05,
+            "modelToken": 19,
+            "modelLogprob": -1.4645202e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 17,
+            "piece": "2",
+            "logprob": -6.615768e-06,
+            "modelToken": 17,
+            "modelLogprob": -6.615768e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 10342,
+            "piece": "ĠTotal",
+            "logprob": -0.0034148302,
+            "modelToken": 10342,
+            "modelLogprob": -0.0034148302,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 18954,
+            "piece": "ĠUSD",
+            "logprob": -1.3380567e-05,
+            "modelToken": 18954,
+            "modelLogprob": -1.3380567e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 220,
+            "piece": "Ġ",
+            "logprob": -2.4899373e-05,
+            "modelToken": 220,
+            "modelLogprob": -2.4899373e-05,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 16,
+            "piece": "1",
+            "logprob": -1.5166313e-06,
+            "modelToken": 16,
+            "modelLogprob": -1.5166313e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 17,
+            "piece": "2",
+            "logprob": -9.921868e-06,
+            "modelToken": 17,
+            "modelLogprob": -9.921868e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 20,
+            "piece": "5",
+            "logprob": -3.0178323e-06,
+            "modelToken": 20,
+            "modelLogprob": -3.0178323e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 13,
+            "piece": ".",
+            "logprob": -1.8017448e-07,
+            "modelToken": 13,
+            "modelLogprob": -1.8017448e-07,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 15,
+            "piece": "0",
+            "logprob": -9.684949e-07,
+            "modelToken": 15,
+            "modelLogprob": -9.684949e-07,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 15,
+            "piece": "0",
+            "logprob": -7.896089e-06,
+            "modelToken": 15,
+            "modelLogprob": -7.896089e-06,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 52267,
+            "piece": "ĠPaid",
+            "logprob": -0.0015231465,
+            "modelToken": 52267,
+            "modelLogprob": -0.0015231465,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          },
+          {
+            "token": 248046,
+            "piece": "\u003c|im_end|\u003e",
+            "logprob": -0.0071512507,
+            "modelToken": 248046,
+            "modelLogprob": -0.0071512507,
+            "intervention": "GENERATION_INTERVENTION_NONE"
+          }
+        ],
+        "text": "![text](39,105,457,692) INVOICE 1042 Total USD 125.00 Paid\u003c|im_end|\u003e",
+        "source": {
+          "collector": "grpc-lighton-ocr",
+          "model": "lightonai/LightOnOCR-3-0.8B",
+          "version": "36d8636925327c671bd8e479c517a004f7566bd9"
+        }
+      }
+    ]
+  }
+}
+{
+  "complete": {
+    "pages": 2,
+    "pagesOk": 2
+  }
+}
