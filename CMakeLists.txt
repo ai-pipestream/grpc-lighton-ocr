@@ -167,8 +167,10 @@ endif()
 if(BUILD_TESTING)
   find_package(Python3 QUIET COMPONENTS Interpreter)
   if(Python3_Interpreter_FOUND)
-    add_test(NAME hardware_rpc_checks_test COMMAND ${Python3_EXECUTABLE}
-      ${CMAKE_CURRENT_SOURCE_DIR}/tests/hardware_rpc_checks_test.py)
+    foreach(check_name hardware_rpc_checks_test hardware_cancellation_checks_test)
+      add_test(NAME ${check_name} COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/${check_name}.py)
+    endforeach()
   endif()
 endif()
 
