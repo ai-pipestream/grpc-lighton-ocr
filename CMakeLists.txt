@@ -29,7 +29,7 @@ if(LIGHTON_SYSTEM_GRPC)
   add_library(grpc++_reflection ALIAS gRPC::grpc++_reflection)
   get_target_property(LIGHTON_PROTOBUF_INCLUDE protobuf::libprotobuf INTERFACE_INCLUDE_DIRECTORIES)
   list(GET LIGHTON_PROTOBUF_INCLUDE 0 LIGHTON_PROTOBUF_INCLUDE)
-  set(protobuf_SOURCE_DIR "${LIGHTON_PROTOBUF_INCLUDE}/..")
+  set(LIGHTON_PROTOBUF_IMPORT_DIR "${LIGHTON_PROTOBUF_INCLUDE}")
 else()
 set(gRPC_INSTALL OFF CACHE BOOL "" FORCE)
 set(gRPC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
@@ -49,6 +49,7 @@ FetchContent_Declare(grpc
   GIT_SUBMODULES_RECURSE TRUE
   SYSTEM)
 FetchContent_MakeAvailable(grpc)
+set(LIGHTON_PROTOBUF_IMPORT_DIR "${protobuf_SOURCE_DIR}/src")
 endif()
 
 # In-process backends. CPU remains available in every build.
@@ -114,7 +115,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E make_directory "${LIGHTON_GENERATED_DIR}"
   COMMAND $<TARGET_FILE:protoc>
   ARGS --proto_path=${LIGHTON_PROTO_DIR}
-       --proto_path=${protobuf_SOURCE_DIR}/src
+       --proto_path=${LIGHTON_PROTOBUF_IMPORT_DIR}
        --cpp_out=${LIGHTON_GENERATED_DIR}
        --grpc_out=${LIGHTON_GENERATED_DIR}
        --plugin=protoc-gen-grpc=$<TARGET_FILE:grpc_cpp_plugin>
