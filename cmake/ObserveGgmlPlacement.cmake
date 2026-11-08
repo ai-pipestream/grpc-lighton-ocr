@@ -10,7 +10,7 @@ string(REPLACE "// backend buffer type" [=[
 using lighton_observer = void (*)(ggml_backend_t, ggml_tensor *, void *);
 static thread_local lighton_observer lighton_observe = nullptr;
 static thread_local void * lighton_observe_data = nullptr;
-extern "C" void lighton_ggml_set_observer(lighton_observer observer, void * data) {
+extern "C" GGML_API void lighton_ggml_set_observer(lighton_observer observer, void * data) {
     lighton_observe = observer;
     lighton_observe_data = data;
 }
