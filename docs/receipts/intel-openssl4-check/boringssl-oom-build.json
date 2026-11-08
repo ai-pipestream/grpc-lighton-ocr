@@ -1,0 +1,9 @@
+{
+  "original_sha256": "6464be975742cb60276e880ac53864d3cb218e5833732dc3cc9b0acd9236958f",
+  "gzip_sha256": "c3e00617234e9dac00a4b7a48671b5dc648382e04a90c8babebc392e168edf4a",
+  "gzip_mtime": 0,
+  "exitcode": 102,
+  "cpu_limit": 2,
+  "memory_limit_at_failure_gib": 24,
+  "oom_kill": 1
+}
