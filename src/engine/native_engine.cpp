@@ -1,4 +1,5 @@
 #include "engine/native_engine.h"
+#include "engine/inference_control.h"
 #include <chrono>
 #include <cstdlib>
 #include <atomic>
@@ -40,35 +41,7 @@ bool observe_placement() {
   const char* value = std::getenv("GRPC_LIGHTON_OBSERVE_PLACEMENT");
   return !value || std::string_view(value) != "0";
 }
-struct Control {
-  Clock::time_point deadline;
-  std::function<bool()> cancelled;
-  mutable std::mutex poll_mutex{};
-  mutable Clock::time_point next_poll{};
-  mutable bool cancellation_seen = false;
-  mutable uint64_t polls = 0;
-  mutable double polling_ms = 0;
-  bool stop() const {
-    std::lock_guard lock(poll_mutex);
-    const auto now = Clock::now();
-    if (now >= deadline || cancellation_seen) return true;
-    // A synchronous gRPC cancellation query polls its completion queue.
-    // Calling it for every graph node can dominate the model's arithmetic.
-    if (now >= next_poll) {
-      cancellation_seen = cancelled();
-      polling_ms += std::chrono::duration<double, std::milli>(Clock::now() - now).count();
-      ++polls;
-      next_poll = Clock::now() + std::chrono::milliseconds(10);
-    }
-    return cancellation_seen;
-  }
-  ~Control() {
-    std::cerr << "native_phase cancel_polls=" << polls << " ms=" << polling_ms << '\n';
-  }
-  void check() const {
-    if (stop()) throw EngineError(EngineError::cancelled, "inference cancelled or deadline exceeded");
-  }
-};
+using detail::Control;
 bool abort_decode(void* p) { return static_cast<Control*>(p)->stop(); }
 void verify(const std::string& file, const char* expected) {
   std::ifstream in(file, std::ios::binary);
@@ -365,7 +338,8 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
     result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result;
     } catch (const EngineError& error) {
       if (error.kind == EngineError::cancelled) throw;
-      result.finish = error.kind == EngineError::budget ? NativeFinish::output_limit : NativeFinish::engine_error;
+      result.finish = error.kind == EngineError::budget ? NativeFinish::output_limit :
+          error.kind == EngineError::deadline ? NativeFinish::deadline : NativeFinish::engine_error;
       result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result;
     } catch (const std::exception&) {
       result.finish = NativeFinish::engine_error;

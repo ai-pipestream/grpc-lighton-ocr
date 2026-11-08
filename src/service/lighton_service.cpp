@@ -131,6 +131,19 @@ void offset_refs(google::protobuf::Message* message, int texts, int pictures) {
 
 }  // namespace
 
+void project_engine_error(const EngineError& error, uint32_t page_no,
+                          locrv1::PageFailure* failure) {
+  failure->Clear();
+  failure->set_page_no(page_no);
+  failure->set_code(error.kind == EngineError::bad_image ? locrv1::PAGE_FAILURE_CODE_BAD_IMAGE :
+      error.kind == EngineError::budget || error.kind == EngineError::deadline ?
+          locrv1::PAGE_FAILURE_CODE_RESOURCE_LIMIT : locrv1::PAGE_FAILURE_CODE_INFERENCE);
+  if (error.kind == EngineError::deadline)
+    failure->set_finish_reason(locrv1::FINISH_REASON_DEADLINE);
+  provenance(failure->mutable_provenance());
+  failure->set_message(error.what());
+}
+
 void project_native_result(const NativeResult& result, uint32_t page_no,
                            locrv1::LightonModel model, uint64_t first_step,
                            locrv1::ParseDocumentResponse* event) {
@@ -285,18 +298,8 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
             if (context->IsCancelled() || error.kind == EngineError::cancelled)
               return {grpc::StatusCode::CANCELLED, error.what()};
             if (error.kind == EngineError::busy) return exhausted(error.what());
-            auto* failure = event.mutable_page_failure(); failure->set_page_no(page.page_no());
-            failure->set_code(error.kind == EngineError::bad_image ? locrv1::PAGE_FAILURE_CODE_BAD_IMAGE :
-                error.kind == EngineError::budget ? locrv1::PAGE_FAILURE_CODE_RESOURCE_LIMIT :
-                locrv1::PAGE_FAILURE_CODE_INFERENCE);
-            provenance(failure->mutable_provenance());
-            if (error.kind == EngineError::bad_image || error.kind == EngineError::budget) {
-              // Admission can fail before any graph: do not attribute a prior
-              // page's completed computation to this rejected input.
-              failure->mutable_provenance()->clear_stages();
-              failure->mutable_provenance()->set_device("unverified");
-            }
-            failure->set_message(error.what()); ++failed;
+            project_engine_error(error, page.page_no(), event.mutable_page_failure());
+            ++failed;
           } catch (const std::exception&) {
             if (context->IsCancelled()) return {grpc::StatusCode::CANCELLED, "inference cancelled"};
             auto* failure = event.mutable_page_failure(); failure->set_page_no(page.page_no());
