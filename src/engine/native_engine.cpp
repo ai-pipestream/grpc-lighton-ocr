@@ -1,11 +1,13 @@
 #include "engine/native_engine.h"
 #include <chrono>
+#include <cstdlib>
 #include <atomic>
 #include <iostream>
 #include "ggml-backend.h"
 #include <fstream>
 #include <mutex>
 #include <vector>
+#include <unordered_map>
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -20,10 +22,49 @@ extern "C" void lighton_ggml_set_observer(
 namespace lighton {
 namespace {
 using Clock = std::chrono::steady_clock;
+struct PhaseTimer {
+  Clock::time_point start = Clock::now(), mark = start;
+  void phase(const char* name) {
+    const auto now = Clock::now();
+    std::cerr << "native_phase " << name << " ms="
+              << std::chrono::duration<double, std::milli>(now - mark).count() << '\n';
+    mark = now;
+  }
+  ~PhaseTimer() {
+    phase("cleanup");
+    std::cerr << "native_phase total ms="
+              << std::chrono::duration<double, std::milli>(Clock::now() - start).count() << '\n';
+  }
+};
+bool observe_placement() {
+  const char* value = std::getenv("GRPC_LIGHTON_OBSERVE_PLACEMENT");
+  return !value || std::string_view(value) != "0";
+}
 struct Control {
   Clock::time_point deadline;
   std::function<bool()> cancelled;
-  bool stop() const { return cancelled() || Clock::now() >= deadline; }
+  mutable std::mutex poll_mutex{};
+  mutable Clock::time_point next_poll{};
+  mutable bool cancellation_seen = false;
+  mutable uint64_t polls = 0;
+  mutable double polling_ms = 0;
+  bool stop() const {
+    std::lock_guard lock(poll_mutex);
+    const auto now = Clock::now();
+    if (now >= deadline || cancellation_seen) return true;
+    // A synchronous gRPC cancellation query polls its completion queue.
+    // Calling it for every graph node can dominate the model's arithmetic.
+    if (now >= next_poll) {
+      cancellation_seen = cancelled();
+      polling_ms += std::chrono::duration<double, std::milli>(Clock::now() - now).count();
+      ++polls;
+      next_poll = Clock::now() + std::chrono::milliseconds(10);
+    }
+    return cancellation_seen;
+  }
+  ~Control() {
+    std::cerr << "native_phase cancel_polls=" << polls << " ms=" << polling_ms << '\n';
+  }
   void check() const {
     if (stop()) throw EngineError(EngineError::cancelled, "inference cancelled or deadline exceeded");
   }
@@ -57,6 +98,7 @@ struct NativeEngine::Impl {
   struct Observation {
     uint64_t device_arithmetic = 0, cpu_arithmetic = 0, cpu_ops = 0;
     ggml_backend_dev_t cpu_device = nullptr;
+    std::unordered_map<ggml_backend_dev_t, bool> cpu_devices;
     std::array<uint64_t, GGML_OP_COUNT> cpu_by_op{};
     void observe(ggml_backend_t backend, ggml_tensor* tensor, ggml_backend_dev_t requested) {
       // Copies/views are not model arithmetic. Device accessibility says
@@ -66,9 +108,15 @@ struct NativeEngine::Impl {
           tensor->op == GGML_OP_PERMUTE || tensor->op == GGML_OP_CPY ||
           tensor->op == GGML_OP_CONT || tensor->op == GGML_OP_DUP) return;
       const auto dev = ggml_backend_get_device(backend);
-      const std::string_view registry = ggml_backend_reg_name(ggml_backend_dev_backend_reg(dev));
-      // BLAS/Accelerate advertises ACCEL, but performs model math on CPU.
-      const bool cpu = ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU || registry == "BLAS";
+      auto found = cpu_devices.find(dev);
+      if (found == cpu_devices.end()) {
+        const std::string_view registry = ggml_backend_reg_name(ggml_backend_dev_backend_reg(dev));
+        // CUDA get_type queries the driver. Cache classification, never execution
+        // counters: one driver query per device/stage/request rather than per op.
+        const bool is_cpu = ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_CPU || registry == "BLAS";
+        found = cpu_devices.emplace(dev, is_cpu).first;
+      }
+      const bool cpu = found->second;
       if (cpu) { ++cpu_ops; ++cpu_by_op[tensor->op]; }
       if (tensor->op == GGML_OP_MUL_MAT || tensor->op == GGML_OP_MUL_MAT_ID) {
         if (cpu) { ++cpu_arithmetic; cpu_device = dev; }
@@ -146,6 +194,7 @@ NativeEngine::NativeEngine(const std::string& directory, const std::string& back
     state.vision_active = true;
     return ask ? (state.active && state.active->stop()) : false;
   };
+  if (!observe_placement()) vp.cb_eval = nullptr;
   impl_->vision.reset(mtmd_init_from_file(impl_->projector.c_str(), impl_->model.get(), vp));
   if (!impl_->vision) throw std::runtime_error("native projector load failed");
   impl_->publish(); // Identities are known; runtime verification is still false.
@@ -184,12 +233,13 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
     throw EngineError(EngineError::budget, "raster exceeds pixel limit");
   if ((width && width != static_cast<uint32_t>(w)) || (height && height != static_cast<uint32_t>(h)))
     throw EngineError(EngineError::bad_image, "declared raster dimensions disagree");
+  PhaseTimer timer;
   NativeResult result{{}, {}, static_cast<uint32_t>(w), static_cast<uint32_t>(h), 0, {}};
     Control control{Clock::now() + std::chrono::seconds(60), std::move(cancelled)};
     impl_->active = &control;
     impl_->vision_observation = {}; impl_->decoder_observation = {};
     struct PublishPlacement { Impl* state; ~PublishPlacement() { state->publish(); } } publish{impl_.get()};
-    lighton_ggml_set_observer(Impl::observe, impl_.get());
+    lighton_ggml_set_observer(observe_placement() ? Impl::observe : nullptr, impl_.get());
     struct ClearObserver { ~ClearObserver() { lighton_ggml_set_observer(nullptr, nullptr); } } clear_observer;
     struct ClearActive { Impl* state; ~ClearActive() { state->active = nullptr; } } clear{impl_.get()};
     auto cp = llama_context_default_params();
@@ -201,12 +251,14 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
       state.vision_active = false;
       return ask ? (state.active && state.active->stop()) : false;
     };
+    if (!observe_placement()) cp.cb_eval = nullptr;
     cp.offload_kqv = impl_->backend != "cpu";
     cp.op_offload = impl_->backend != "cpu";
     cp.abort_callback = abort_decode; cp.abort_callback_data = &control;
     std::unique_ptr<llama_context, decltype(&llama_free)> ctx(
         llama_init_from_model(impl_->model.get(), cp), llama_free);
     if (!ctx) throw std::runtime_error("native decoder context failed");
+    timer.phase("context_init");
     auto* vision = impl_->vision.get();
     control.check();
     auto decoded = mtmd_helper_bitmap_init_from_buf(vision, reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size(), false,
@@ -225,13 +277,15 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
       throw std::runtime_error("native multimodal tokenization failed");
     if (mtmd_helper_get_n_tokens(chunks.get()) + max_tokens > cp.n_ctx)
       throw EngineError(EngineError::budget, "prompt exceeds context budget");
+    timer.phase("image_preparation");
     llama_pos past = 0;
     if (mtmd_helper_eval_chunks(vision, ctx.get(), chunks.get(), 0, 0, 512, true, &past)) {
       control.check();
       throw std::runtime_error("native multimodal prefill failed");
     }
-    if (!impl_->snapshot(impl_->vision_observation).runtime_verified ||
-        !impl_->snapshot(impl_->decoder_observation).runtime_verified)
+    timer.phase("multimodal_prefill");
+    if (observe_placement() && (!impl_->snapshot(impl_->vision_observation).runtime_verified ||
+        !impl_->snapshot(impl_->decoder_observation).runtime_verified))
       throw std::runtime_error("model stage did not execute arithmetic on the requested device");
     try {
     std::unique_ptr<llama_sampler, decltype(&llama_sampler_free)> sampler(
@@ -247,9 +301,11 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
         llama_batch_ext_init(ctx.get()), llama_batch_ext_free);
     bool complete = false;
     size_t trace_bytes = 0;
+    double sample_ms = 0, decode_ms = 0;
     for (uint32_t i = 0; i < max_tokens; ++i) {
       if (control.cancelled()) throw EngineError(EngineError::cancelled, "client cancelled inference");
       if (Clock::now() >= control.deadline) { result.finish = NativeFinish::deadline; result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result; }
+      const auto sample_start = Clock::now();
       llama_token token = llama_sampler_sample(sampler.get(), ctx.get(), -1);
       const float* logits = llama_get_logits_ith(ctx.get(), -1);
       const int count = llama_vocab_n_tokens(vocab);
@@ -282,12 +338,17 @@ NativeResult NativeEngine::infer(std::string_view bytes, uint32_t max_tokens, fl
           !llama_batch_ext_set_output_logits(batch.get(), index, true))
         throw std::runtime_error("native batch setup failed");
       ++past;
+      sample_ms += std::chrono::duration<double, std::milli>(Clock::now() - sample_start).count();
+      const auto decode_start = Clock::now();
       if (llama_process(ctx.get(), LLAMA_PROCESS_TYPE_DECODE, batch.get())) {
         if (control.cancelled()) throw EngineError(EngineError::cancelled, "client cancelled inference");
         result.finish = Clock::now() >= control.deadline ? NativeFinish::deadline : NativeFinish::engine_error;
         result.placement = {impl_->snapshot(impl_->vision_observation), impl_->snapshot(impl_->decoder_observation)}; return result;
       }
+      decode_ms += std::chrono::duration<double, std::milli>(Clock::now() - decode_start).count();
     }
+    std::cerr << "native_phase sampling ms=" << sample_ms << " decode ms=" << decode_ms << '\n';
+    timer.phase("token_loop");
     if (!complete) result.finish = NativeFinish::token_limit;
     impl_->publish();
     std::cerr << "placement vision=" << vision_placement().device_id
