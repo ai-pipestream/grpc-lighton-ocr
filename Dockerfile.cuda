@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1
+# Native CUDA build, including Orin ARM64 (build with architecture 87).
+# Models are mounted read-only and never downloaded during inference.
+FROM nvidia/cuda:13.2.1-devel-ubuntu24.04 AS build
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates cmake g++-14 git ninja-build \
+    && apt-get clean
+WORKDIR /src
+COPY . .
+ARG CUDA_ARCHITECTURES=87;89
+ARG TARGETARCH
+RUN --mount=type=cache,id=lighton-cuda13.2-ubuntu24-gcc14-grpc1.83-f3586e66-${TARGETARCH},target=/build \
+    cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DLIGHTON_CUDA=ON -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
+    -DCMAKE_CUDA_HOST_COMPILER=g++-14 -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCHITECTURES}" \
+    && cmake --build /build --target grpc-lighton-ocr-server markdown_test service_test --parallel 2 \
+    && ctest --test-dir /build --output-on-failure \
+    && mkdir -p /out/lib \
+    && cp /build/grpc-lighton-ocr-server /out/ \
+    && cp /build/_deps/llama-src/LICENSE /out/llama-LICENSE \
+    && cp -L "$(g++-14 -print-file-name=libstdc++.so.6)" /out/lib/
+FROM nvidia/cuda:13.2.1-runtime-ubuntu24.04
+# Jetson's driver supplies compatibility; stale container compat hooks fail.
+RUN for dir in /usr/local/cuda-*/compat*; do if [ -d "$dir" ]; then rm -r "$dir"; fi; done
+COPY --from=build /out/grpc-lighton-ocr-server /usr/local/bin/
+COPY --from=build /out/lib/ /opt/lighton/lib/
+
+COPY --from=build /src/LICENSE /usr/share/licenses/grpc-lighton-ocr/LICENSE
+COPY --from=build /out/llama-LICENSE /usr/share/licenses/grpc-lighton-ocr/llama-LICENSE
+ENV LD_LIBRARY_PATH=/opt/lighton/lib
+ENV GRPC_LIGHTON_BACKEND=cuda GRPC_LIGHTON_MODELS_DIR=/models
+USER 65532:65532
+EXPOSE 50074
+ENTRYPOINT ["/usr/local/bin/grpc-lighton-ocr-server"]
