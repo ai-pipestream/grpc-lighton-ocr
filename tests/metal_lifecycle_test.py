@@ -26,11 +26,11 @@ def main():
     image = (ROOT / "tests/fixtures/native-invoice.png").read_bytes()
     warm, _ = rpc(args.address, "ParseDocument", payload(image, 2), 120)
     info, _ = rpc(args.address, "GetServiceInfo", "{}", 10)
+    (args.output / "warm.jsonl").write_text(warm)
+    (args.output / "info.json").write_text(info)
     provenance = json.loads(info)["provenance"]
     validate_placement(provenance, "metal")
     validate_output(decode_events(warm), provenance)
-    (args.output / "warm.jsonl").write_text(warm)
-    (args.output / "info.json").write_text(info)
     for repeat in range(3):
         command = ["grpcurl", "-plaintext", "-max-time", "0.25", "-import-path", str(ROOT / "proto"),
             "-proto", "ai/pipestream/lightonocr/v1/lighton_ocr.proto", "-d", "@",
