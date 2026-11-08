@@ -144,6 +144,10 @@ target_link_libraries(grpc-lighton-ocr-server PRIVATE lighton_service grpc++_ref
 lighton_warnings(grpc-lighton-ocr-server)
 
 if(BUILD_TESTING)
+  add_executable(inference_control_test tests/inference_control_test.cpp)
+  target_include_directories(inference_control_test PRIVATE src)
+  lighton_warnings(inference_control_test)
+  add_test(NAME inference_control_test COMMAND inference_control_test)
   add_executable(markdown_test tests/markdown_test.cpp)
   target_link_libraries(markdown_test PRIVATE lighton_parse)
   lighton_warnings(markdown_test)
