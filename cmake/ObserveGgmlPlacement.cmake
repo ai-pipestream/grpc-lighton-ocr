@@ -35,6 +35,11 @@ string(REPLACE "                // TODO: pass backend to the callback, then the 
                         lighton_observe(split_backend, split->graph.nodes[n], lighton_observe_data);
                 }
                 // TODO: pass backend to the callback, then the user can decide if they want to synchronize]=] _text "${_text}")
+# A full split must retain its UID, otherwise CUDA's graph reuse fast path
+# is bypassed merely by installing a callback. Partial views retain UID zero.
+string(REPLACE "                struct ggml_cgraph gv = ggml_graph_view(&split->graph, j0, j1 + 1);"
+  "                struct ggml_cgraph gv = ggml_graph_view(&split->graph, j0, j1 + 1);\n                if (j0 == 0 && j1 + 1 == split->graph.n_nodes) gv.uid = split->graph.uid;"
+  _text "${_text}")
 # No tensor data is requested, so no synchronization is needed. Preserve
 # upstream cancellation/data callbacks when they do request a result.
 string(REPLACE "                ggml_backend_synchronize(split_backend);"
