@@ -49,6 +49,9 @@ FetchContent_Declare(grpc
   GIT_SUBMODULES_RECURSE TRUE
   SYSTEM)
 FetchContent_MakeAvailable(grpc)
+if(gRPC_SSL_PROVIDER STREQUAL "package")
+  include(cmake/PatchGrpcOpenSSL.cmake)
+endif()
 set(LIGHTON_PROTOBUF_IMPORT_DIR "${protobuf_SOURCE_DIR}/src")
 endif()
 
