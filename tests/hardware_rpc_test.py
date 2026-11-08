@@ -73,6 +73,22 @@ def validate_output(events, provenance):
         text = " ".join(base["text"] for base in bases)
         require(all(word in text for word in ("INVOICE", "1042", "125.00", "Paid")),
                 f"invoice content missing on page {number}: {text}")
+        # Hand-read locations in the authored 1000x300 raster. Permit line
+        # or paragraph grouping, but not plausible text at unrelated boxes.
+        for anchor, x, y in (("INVOICE", 140, 62), ("1042", 320, 62),
+                             ("125.00", 370, 122), ("Paid", 80, 182)):
+            located = False
+            for base in bases:
+                if anchor not in base["text"]:
+                    continue
+                for prov in base.get("prov", []):
+                    box = prov["bbox"]
+                    left, top = box.get("l", 0), box.get("t", 0)
+                    located |= (left - 18 <= x <= box["r"] + 18
+                                and top - 18 <= y <= box["b"] + 18
+                                and box["r"] - left <= 550
+                                and box["b"] - top <= 240)
+            require(located, f"{anchor} has no box at its authored location on page {number}")
         for base in bases:
             require(bool(base.get("prov")), "text has no location")
             for prov in base["prov"]:
