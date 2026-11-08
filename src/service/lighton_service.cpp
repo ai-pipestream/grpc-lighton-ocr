@@ -70,16 +70,18 @@ grpc::Status exhausted(const std::string& message) {
   return grpc::Status(grpc::StatusCode::RESOURCE_EXHAUSTED, message);
 }
 
-void provenance(locrv1::InferenceProvenance* out, const NativeEngine* engine = nullptr) {
+void provenance(locrv1::InferenceProvenance* out, const NativeEngine* engine = nullptr,
+                const NativePlacementPair* request_placement = nullptr) {
   out->set_service_version("0.1.0"); out->set_backend_revision(kBackendRevision);
   out->set_model_revision(kModelRevision); out->set_model_sha256(kModelSha);
   out->set_projector_sha256(kProjectorSha);
-  out->set_device(engine ? (engine->decoder_placement().backend == "cpu" ? "cpu" :
-                           engine->decoder_placement().device_id) : "unverified");
+  const auto pair = request_placement ? *request_placement : engine ? engine->placement() : NativePlacementPair{};
+  out->set_device((engine || request_placement) ? (pair.decoder.backend == "cpu" ? "cpu" :
+                           pair.decoder.device_id) : "unverified");
   out->clear_stages();
-  if (engine) {
-    for (const auto& [stage, placed] : {std::pair{locrv1::INFERENCE_STAGE_VISION, engine->vision_placement()},
-                                      std::pair{locrv1::INFERENCE_STAGE_DECODER, engine->decoder_placement()}}) {
+  if (engine || request_placement) {
+    for (const auto& [stage, placed] : {std::pair{locrv1::INFERENCE_STAGE_VISION, pair.vision},
+                                      std::pair{locrv1::INFERENCE_STAGE_DECODER, pair.decoder}}) {
       auto* placement = out->add_stages();
       placement->set_stage(stage);
       placement->set_backend(placed.backend == "cuda" ? locrv1::COMPUTE_BACKEND_CUDA :
@@ -255,7 +257,7 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
                 [&] { return context->IsCancelled(); });
             project_native_result(result, page.page_no(), config_.model, steps, &event);
             provenance(event.has_page_document() ? event.mutable_page_document()->mutable_provenance() :
-                       event.mutable_page_failure()->mutable_provenance(), engine_.get());
+                       event.mutable_page_failure()->mutable_provenance(), nullptr, &result.placement);
             if (event.has_page_failure()) {
               ++failed;
               if (!transport.call([&] { return stream->Write(event); })) return {grpc::StatusCode::CANCELLED, "response stream closed"};
@@ -280,7 +282,7 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
             failure->set_code(error.kind == EngineError::bad_image ? locrv1::PAGE_FAILURE_CODE_BAD_IMAGE :
                 error.kind == EngineError::budget ? locrv1::PAGE_FAILURE_CODE_RESOURCE_LIMIT :
                 locrv1::PAGE_FAILURE_CODE_INFERENCE);
-            provenance(failure->mutable_provenance(), engine_.get());
+            provenance(failure->mutable_provenance());
             if (error.kind == EngineError::bad_image || error.kind == EngineError::budget) {
               // Admission can fail before any graph: do not attribute a prior
               // page's completed computation to this rejected input.
@@ -292,7 +294,7 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
             if (context->IsCancelled()) return {grpc::StatusCode::CANCELLED, "inference cancelled"};
             auto* failure = event.mutable_page_failure(); failure->set_page_no(page.page_no());
             failure->set_code(locrv1::PAGE_FAILURE_CODE_INFERENCE);
-            provenance(failure->mutable_provenance(), engine_.get());
+            provenance(failure->mutable_provenance());
             failure->set_finish_reason(locrv1::FINISH_REASON_ENGINE_ERROR);
             failure->set_message("native inference failed"); ++failed;
           }
