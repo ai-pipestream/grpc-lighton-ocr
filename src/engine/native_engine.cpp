@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cmath>
 #include <openssl/sha.h>
+#include <openssl/evp.h>
 #include "llama.h"
 #include "mtmd.h"
 #include "mtmd-helper.h"
@@ -31,12 +32,17 @@ bool abort_decode(void* p) { return static_cast<Control*>(p)->stop(); }
 void verify(const std::string& file, const char* expected) {
   std::ifstream in(file, std::ios::binary);
   if (!in) throw std::runtime_error("missing configured model artifact: " + file);
-  SHA256_CTX context; SHA256_Init(&context);
+  std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> context(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+  if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1)
+    throw std::runtime_error("model artifact SHA256 initialization failed");
   std::array<char, 65536> bytes;
   while (in.read(bytes.data(), bytes.size()) || in.gcount())
-    SHA256_Update(&context, bytes.data(), in.gcount());
+    if (EVP_DigestUpdate(context.get(), bytes.data(), static_cast<size_t>(in.gcount())) != 1)
+      throw std::runtime_error("model artifact SHA256 update failed");
   if (!in.eof()) throw std::runtime_error("model artifact read failed: " + file);
-  unsigned char digest[SHA256_DIGEST_LENGTH]; SHA256_Final(digest, &context);
+  unsigned char digest[SHA256_DIGEST_LENGTH]; unsigned int size = 0;
+  if (EVP_DigestFinal_ex(context.get(), digest, &size) != 1 || size != SHA256_DIGEST_LENGTH)
+    throw std::runtime_error("model artifact SHA256 finalization failed");
   std::string hex; const char* digits = "0123456789abcdef";
   for (auto c : digest) { hex += digits[c >> 4]; hex += digits[c & 15]; }
   if (hex != expected) throw std::runtime_error("model artifact SHA256 mismatch: " + file);
