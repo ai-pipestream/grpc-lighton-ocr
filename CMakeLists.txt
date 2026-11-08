@@ -144,6 +144,11 @@ target_link_libraries(grpc-lighton-ocr-server PRIVATE lighton_service grpc++_ref
 lighton_warnings(grpc-lighton-ocr-server)
 
 if(BUILD_TESTING)
+  add_executable(scheduler_stop_test tests/scheduler_stop_test.cpp)
+  target_include_directories(scheduler_stop_test PRIVATE src "${llama_SOURCE_DIR}/ggml/src")
+  target_link_libraries(scheduler_stop_test PRIVATE ggml ggml-cpu)
+  lighton_warnings(scheduler_stop_test)
+  add_test(NAME scheduler_stop_test COMMAND scheduler_stop_test)
   add_executable(inference_control_test tests/inference_control_test.cpp)
   target_include_directories(inference_control_test PRIVATE src)
   lighton_warnings(inference_control_test)
