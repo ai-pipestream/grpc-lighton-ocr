@@ -52,6 +52,18 @@ FetchContent_MakeAvailable(grpc)
 set(LIGHTON_PROTOBUF_IMPORT_DIR "${protobuf_SOURCE_DIR}/src")
 endif()
 
+# Model identity hashing uses EVP directly. Match gRPC's crypto provider so
+# bundled BoringSSL headers cannot accidentally be paired with system OpenSSL.
+if(LIGHTON_SYSTEM_GRPC OR gRPC_SSL_PROVIDER STREQUAL "package")
+  find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+  set(LIGHTON_CRYPTO_TARGET OpenSSL::Crypto)
+elseif(TARGET crypto)
+  set(LIGHTON_CRYPTO_TARGET crypto)
+  set(LIGHTON_CRYPTO_INCLUDE "${grpc_SOURCE_DIR}/third_party/boringssl-with-bazel/include")
+else()
+  message(FATAL_ERROR "LightOn requires gRPC's OpenSSL or bundled BoringSSL crypto provider")
+endif()
+
 # In-process backends. CPU remains available in every build.
 option(LIGHTON_CUDA "Build the native CUDA backend" OFF)
 option(LIGHTON_SYCL "Build the native SYCL backend" OFF)
@@ -136,6 +148,10 @@ add_library(lighton_service STATIC
 target_include_directories(lighton_service PUBLIC src)
 target_include_directories(lighton_service SYSTEM PRIVATE "${llama_SOURCE_DIR}/vendor/stb")
 target_link_libraries(lighton_service PUBLIC lighton_parse llama mtmd)
+target_link_libraries(lighton_service PRIVATE ${LIGHTON_CRYPTO_TARGET})
+if(LIGHTON_CRYPTO_INCLUDE)
+  target_include_directories(lighton_service SYSTEM PRIVATE "${LIGHTON_CRYPTO_INCLUDE}")
+endif()
 lighton_warnings(lighton_service)
 
 add_executable(grpc-lighton-ocr-server src/main.cpp)
