@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(LIGHTON_WERROR "Treat warnings as errors" ON)
+# OFF keeps the CPU-only build. ON adds the ggml OpenVINO backend for Intel
+# GPU inference and needs the OpenVINO runtime and OpenCL development files.
+option(LIGHTON_OPENVINO "Build the ggml OpenVINO backend (Intel GPU)" OFF)
 
 # Warnings stay on our targets. add_compile_options would also instrument
 # the fetched gRPC build, and that tree does not compile with -Werror.
@@ -38,9 +41,11 @@ FetchContent_Declare(grpc
   SYSTEM)
 FetchContent_MakeAvailable(grpc)
 
-# CPU-only, in-process backend. No downloads or subprocesses during inference.
+# In-process backend. No downloads or subprocesses during inference. The
+# default build is CPU only; LIGHTON_OPENVINO adds one accelerator backend.
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(GGML_CUDA OFF CACHE BOOL "" FORCE)
+set(GGML_OPENVINO ${LIGHTON_OPENVINO} CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
@@ -108,13 +113,36 @@ target_include_directories(lighton_parse PUBLIC src)
 target_link_libraries(lighton_parse PUBLIC lighton_proto re2::re2)
 lighton_warnings(lighton_parse)
 
+# Device selection and placement accounting: ggml only, no model code.
+add_library(lighton_device STATIC
+  src/engine/device.cpp
+  src/engine/placement.cpp)
+target_include_directories(lighton_device PUBLIC src)
+target_link_libraries(lighton_device PUBLIC ggml)
+if(LIGHTON_OPENVINO)
+  # The same runtime ggml links. Used once at startup to list devices, so a
+  # missing device is a clean startup error and not an abort inside ggml.
+  find_package(OpenVINO REQUIRED COMPONENTS Runtime)
+  target_link_libraries(lighton_device PRIVATE openvino::runtime)
+  target_compile_definitions(lighton_device PUBLIC LIGHTON_OPENVINO=1)
+endif()
+lighton_warnings(lighton_device)
+
+# The page an accelerator must read correctly before the server listens. It
+# is compiled in, so the check needs no file beside the weights.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/native-invoice.png" LIGHTON_REFERENCE_PAGE_HEX HEX)
+string(REGEX REPLACE "(..)" "0x\\1," LIGHTON_REFERENCE_PAGE_BYTES "${LIGHTON_REFERENCE_PAGE_HEX}")
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/reference/reference_page.inc"
+  CONTENT "${LIGHTON_REFERENCE_PAGE_BYTES}\n" @ONLY)
+
 add_library(lighton_service STATIC
   src/engine/native_engine.cpp
   src/config.cpp
   src/service/lighton_service.cpp)
 target_include_directories(lighton_service PUBLIC src)
 target_include_directories(lighton_service SYSTEM PRIVATE "${llama_SOURCE_DIR}/vendor/stb")
-target_link_libraries(lighton_service PUBLIC lighton_parse llama mtmd)
+target_include_directories(lighton_service PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/reference")
+target_link_libraries(lighton_service PUBLIC lighton_parse lighton_device llama mtmd)
 lighton_warnings(lighton_service)
 
 add_executable(grpc-lighton-ocr-server src/main.cpp)
@@ -131,6 +159,18 @@ if(BUILD_TESTING)
   target_link_libraries(service_test PRIVATE lighton_service)
   lighton_warnings(service_test)
   add_test(NAME service_test COMMAND service_test)
+
+  add_executable(config_test tests/config_test.cpp)
+  target_link_libraries(config_test PRIVATE lighton_service)
+  lighton_warnings(config_test)
+  add_test(NAME config_test COMMAND config_test)
+
+  # With LIGHTON_OPENVINO this also runs the OpenVINO backend on its CPU
+  # device and needs the OpenVINO CPU plugin; it never needs a GPU.
+  add_executable(placement_test tests/placement_test.cpp)
+  target_link_libraries(placement_test PRIVATE lighton_device)
+  lighton_warnings(placement_test)
+  add_test(NAME placement_test COMMAND placement_test)
 endif()
 
 # Explicit qualification gate: supplied models are required, never skipped.

@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Required real-model RPC qualification. Missing models are failures, never skips.
 Usage: native_rpc_test.py SERVER MODEL_DIRECTORY [FIXTURE]
+LIGHTON_EXPECT_DEVICE names the device the server must report (default cpu);
+an accelerator reports "<device> - <runtime device name>".
+LIGHTON_BUSY_PAGES sets the page count of the requests that must still be
+running when admission and cancellation are probed (default 1; raise it for
+a device that finishes one page within the probe delay).
 """
 import base64
 import json
@@ -20,6 +25,8 @@ with socket.socket() as sock:
     address = f'127.0.0.1:{sock.getsockname()[1]}'
 log = open('/tmp/lighton-native-rpc-server.log', 'w')
 external = os.environ.get('LIGHTON_RPC_ADDRESS')
+expected_device = os.environ.get('LIGHTON_EXPECT_DEVICE', 'cpu')
+busy_pages = int(os.environ.get('LIGHTON_BUSY_PAGES', '1'))
 if external:
     address = external
 process = None if external else subprocess.Popen([server], env=dict(os.environ, GRPC_LIGHTON_LISTEN_ADDRESS=address,
@@ -51,7 +58,9 @@ try:
             raise RuntimeError('startup failed: '+info.stderr)
         time.sleep(.1)
     info = json.loads(info.stdout)
-    assert info['engineLoaded'] and info['provenance']['device'] == 'cpu', info
+    device = info['provenance']['device']
+    assert info['engineLoaded'] and (device == expected_device or
+                                     device.startswith(expected_device + ' - ')), info
     assert len(info['provenance']['modelSha256']) == 64
     health = subprocess.run(['grpcurl', '-plaintext', '-import-path', str(root/'tests'),
         '-proto', 'health.proto', '-d', json.dumps({'service':service.rstrip('/')}),
@@ -108,7 +117,7 @@ try:
     concurrent = subprocess.Popen(args + ['-max-time', '120', '-d', '@', address,
         service+'ParseDocument'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, text=True)
-    concurrent.stdin.write(payload(image)); concurrent.stdin.close(); concurrent.stdin = None
+    concurrent.stdin.write(payload(image, pages=busy_pages)); concurrent.stdin.close(); concurrent.stdin = None
     try:
         time.sleep(.3)
         other = call('ParseDocument', payload(image))
@@ -119,7 +128,7 @@ try:
         if concurrent.poll() is None:
             concurrent.kill(); concurrent.wait()
     print('single-inference admission rejects concurrent decode PASS')
-    cancelled = call('ParseDocument', payload(image), .2)
+    cancelled = call('ParseDocument', payload(image, pages=busy_pages), .2)
     assert cancelled.returncode != 0 and 'DeadlineExceeded' in cancelled.stderr, cancelled.stderr
     # Cancellation must release admission promptly, not poison the next context.
     time.sleep(1)

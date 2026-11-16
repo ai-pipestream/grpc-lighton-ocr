@@ -70,10 +70,10 @@ grpc::Status exhausted(const std::string& message) {
   return grpc::Status(grpc::StatusCode::RESOURCE_EXHAUSTED, message);
 }
 
-void provenance(locrv1::InferenceProvenance* out) {
+void provenance(const EngineInfo& engine, locrv1::InferenceProvenance* out) {
   out->set_service_version("0.1.0"); out->set_backend_revision(kBackendRevision);
-  out->set_model_revision(kModelRevision); out->set_model_sha256(kModelSha);
-  out->set_projector_sha256(kProjectorSha); out->set_device("cpu");
+  out->set_model_revision(kModelRevision); out->set_model_sha256(engine.model_sha256);
+  out->set_projector_sha256(engine.projector_sha256); out->set_device(engine.device);
   std::array<char, 256> hostname{};
   if (::gethostname(hostname.data(), hostname.size() - 1) == 0) out->set_server_instance(hostname.data());
 }
@@ -110,7 +110,7 @@ void offset_refs(google::protobuf::Message* message, int texts, int pictures) {
 
 void project_native_result(const NativeResult& result, uint32_t page_no,
                            locrv1::LightonModel model, uint64_t first_step,
-                           locrv1::ParseDocumentResponse* event) {
+                           locrv1::ParseDocumentResponse* event, const EngineInfo& engine) {
   docv1::CollectorSource source;
   source.set_collector("grpc-lighton-ocr"); source.set_model(model_repo(model));
   source.set_version(kModelRevision);
@@ -131,13 +131,13 @@ void project_native_result(const NativeResult& result, uint32_t page_no,
   document.add_generation_traces()->CopyFrom(trace);
   if (parsed && result.finish == NativeFinish::end_token) {
     auto* converted = event->mutable_page_document();
-    converted->set_page_no(page_no); provenance(converted->mutable_provenance());
+    converted->set_page_no(page_no); provenance(engine, converted->mutable_provenance());
     converted->set_finish_reason(locrv1::FINISH_REASON_END_TOKEN);
     converted->mutable_document()->Swap(&document);
     return;
   }
   auto* failure = event->mutable_page_failure(); failure->set_page_no(page_no);
-  failure->mutable_generation_trace()->CopyFrom(trace); provenance(failure->mutable_provenance());
+  failure->mutable_generation_trace()->CopyFrom(trace); provenance(engine, failure->mutable_provenance());
   if (parsed) failure->mutable_partial_document()->Swap(&document);
   switch (result.finish) {
     case NativeFinish::token_limit: failure->set_finish_reason(locrv1::FINISH_REASON_TOKEN_LIMIT); break;
@@ -155,9 +155,18 @@ void project_native_result(const NativeResult& result, uint32_t page_no,
 LightOnOcrServiceImpl::LightOnOcrServiceImpl(Config config) : config_(std::move(config)) {
   if (!config_.diagnostic_no_engine) {
     if (config_.model != locrv1::LIGHTON_MODEL_0_8B)
-      throw std::invalid_argument("only CPU LightOnOCR-3-0.8B is qualified; 4B is unavailable");
-    engine_ = std::make_unique<NativeEngine>(config_.models_dir);
+      throw std::invalid_argument("only LightOnOCR-3-0.8B is qualified; 4B is unavailable");
+    engine_ = std::make_unique<NativeEngine>(
+        EngineOptions{config_.models_dir, config_.device, config_.threads});
   }
+}
+
+std::string LightOnOcrServiceImpl::device_report() const {
+  if (!engine_) return "none (diagnostic mode, no engine)";
+  const EngineInfo& engine = engine_->info();
+  std::string report = engine.device + ", " + std::to_string(config_.threads) + " host threads";
+  if (!engine.placement.empty()) report += "; startup placement probe: " + engine.placement;
+  return report;
 }
 
 grpc::Status LightOnOcrServiceImpl::GetServiceInfo(grpc::ServerContext* /*context*/,
@@ -165,7 +174,7 @@ grpc::Status LightOnOcrServiceImpl::GetServiceInfo(grpc::ServerContext* /*contex
                                                    locrv1::GetServiceInfoResponse* response) {
   response->set_listen_address(config_.listen_address);
   response->set_engine_loaded(engine_loaded());
-  if (engine_loaded()) provenance(response->mutable_provenance());
+  if (engine_loaded()) provenance(engine_->info(), response->mutable_provenance());
   response->set_model(config_.model);
   response->set_model_repo(model_repo(config_.model));
   return grpc::Status::OK;
@@ -236,7 +245,7 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
             auto result = engine_->infer(page.png(), options.max_tokens_per_page(),
                 options.temperature(), page.width_px(), page.height_px(),
                 [&] { return context->IsCancelled(); });
-            project_native_result(result, page.page_no(), config_.model, steps, &event);
+            project_native_result(result, page.page_no(), config_.model, steps, &event, engine_->info());
             if (event.has_page_failure()) {
               ++failed;
               if (!transport.call([&] { return stream->Write(event); })) return {grpc::StatusCode::CANCELLED, "response stream closed"};
@@ -261,13 +270,13 @@ grpc::Status LightOnOcrServiceImpl::ParseDocument(
             failure->set_code(error.kind == EngineError::bad_image ? locrv1::PAGE_FAILURE_CODE_BAD_IMAGE :
                 error.kind == EngineError::budget ? locrv1::PAGE_FAILURE_CODE_RESOURCE_LIMIT :
                 locrv1::PAGE_FAILURE_CODE_INFERENCE);
-            provenance(failure->mutable_provenance());
+            provenance(engine_->info(), failure->mutable_provenance());
             failure->set_message(error.what()); ++failed;
           } catch (const std::exception&) {
             if (context->IsCancelled()) return {grpc::StatusCode::CANCELLED, "inference cancelled"};
             auto* failure = event.mutable_page_failure(); failure->set_page_no(page.page_no());
             failure->set_code(locrv1::PAGE_FAILURE_CODE_INFERENCE);
-            provenance(failure->mutable_provenance());
+            provenance(engine_->info(), failure->mutable_provenance());
             failure->set_finish_reason(locrv1::FINISH_REASON_ENGINE_ERROR);
             failure->set_message("native inference failed"); ++failed;
           }

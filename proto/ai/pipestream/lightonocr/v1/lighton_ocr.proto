@@ -180,7 +180,9 @@ message InferenceProvenance {
   string model_sha256 = 4;
   // SHA256 of the loaded vision GGUF.
   string projector_sha256 = 5;
-  // Execution device, currently cpu.
+  // Execution device: cpu, or "openvino:<id> - <device name>" with the name
+  // the native runtime reports. An accelerator is named only after a real
+  // inference ran with every graph node placed on it.
   string device = 6;
   // Host or container instance that performed inference.
   string server_instance = 7;

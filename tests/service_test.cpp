@@ -57,6 +57,20 @@ int main() {
     expect(rejected, "production missing weights and unqualified 4B fail startup");
   }
   {
+    // The device is resolved before any weight is read, so a device this
+    // host cannot provide is named in the failure. Never a CPU substitute.
+    lighton::Config accelerated;
+    accelerated.models_dir = "/nonexistent-lighton-models";
+    accelerated.device = lighton::parse_device("openvino:GPU.9");
+    std::string why;
+    try { lighton::LightOnOcrServiceImpl invalid(accelerated); }
+    catch (const std::exception& error) { why = error.what(); }
+    expect(why.find("GRPC_LIGHTON_DEVICE=openvino:GPU.9") != std::string::npos,
+           "an unavailable accelerator fails startup by name: " + why);
+    expect(start().service->device_report().find("diagnostic") != std::string::npos,
+           "diagnostic mode reports that no device is in use");
+  }
+  {
     lighton::NativeResult malformed;
     malformed.width = 1000; malformed.height = 300;
     malformed.text = "![text](99999999999999999,0,1000,1000) café";

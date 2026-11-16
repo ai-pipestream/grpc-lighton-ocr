@@ -76,6 +76,7 @@ int main() {
                              service.engine_loaded());
     // The empty health service name remains transport liveness. Callers that
     // route OCR requests must check the fully qualified service name.
+    std::cout << "grpc-lighton-ocr device: " << service.device_report() << '\n';
     std::cout << "grpc-lighton-ocr listening on " << config.listen_address << '\n';
 
     char byte = 0;
