@@ -1,0 +1,112 @@
+# syntax=docker/dockerfile:1.28
+# Intel GPU image (LIGHTON_OPENVINO=ON): the text model on llama.cpp's ggml
+# OpenVINO backend, the vision encoder as an OpenVINO model run through the
+# OpenVINO runtime. linux/amd64 only. Weights remain external and read-only,
+# as in the CPU Dockerfile. This image expects the F16 artifacts (see
+# models/MANIFEST): model-f16.gguf and vision-f16.gguf, because the OpenVINO
+# GPU plugin does not take BF16 weights, and the encoder exported from
+# vision-f16.gguf, vision-encoder-f16.xml and .bin. The export tool is built
+# in the build stage and stays there (scripts/export-vision-encoder.sh).
+#
+# OpenVINO 2026.4.1 comes from Intel's release archive, checked against a
+# pinned sha256 (the value Intel publishes next to the archive). The pinned
+# ggml OpenVINO backend is written against the 2026 API and does not compile
+# with 2025.4.1 (ov::ProfilingInfo::start_time), and Intel's APT repo ends at
+# 2025.4.1. Same source and version as the grpc-asr OpenVINO image. The base
+# is ubuntu:26.04 because its own archive ships intel-opencl-icd 26.05 (NEO)
+# with libigc2 2.28.4, the Battlemage-capable compute runtime the OpenVINO
+# GPU plugin needs for Arc B-series cards.
+#
+# The runtime image takes the OpenVINO runtime library, its GPU plugin, the
+# reader for the IR format (a file parser, not a device) and TBB from the
+# build stage, and nothing else of OpenVINO: no CPU plugin and no routing
+# plugin (AUTO, HETERO, MULTI), so there is no OpenVINO device in it that
+# could run a graph on the CPU. The build stage keeps the CPU plugin: the
+# in-build tests run on the OpenVINO CPU device.
+#
+#   docker build -f Dockerfile.openvino -t grpc-lighton-ocr:openvino .
+#   docker run --rm --read-only --cap-drop ALL --device /dev/dri \
+#     --group-add "$(stat -c %g /dev/dri/renderD128)" \
+#     -v /absolute/path/to/models:/models:ro -p 50074:50074 \
+#     grpc-lighton-ocr:openvino
+#
+# The image runs as the numeric user 65532; --group-add gives it the host's
+# render group, which owns the render node. Startup fails when the configured
+# device is absent or when any graph node is placed on the ggml CPU backend.
+FROM ubuntu:26.04 AS build
+ENV DEBIAN_FRONTEND=noninteractive
+# intel-opencl-icd is not needed to build or to run the in-build tests. It
+# lets the qualification tools kept in this stage (/out/tools) run on a GPU.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates cmake curl g++ git ninja-build pkg-config \
+        ocl-icd-opencl-dev opencl-headers opencl-clhpp-headers intel-opencl-icd \
+    && rm -rf /var/lib/apt/lists/*
+
+# OpenVINO 2026.4.1 runtime, headers, CMake package and its own TBB
+# (Apache-2.0; license texts under docs/licensing). The OpenCL packages above
+# are what ggml's OpenVINO backend shares its GPU buffers with the plugin
+# through.
+RUN curl -fsSL --retry 5 -o /tmp/openvino.tgz \
+        https://storage.openvinotoolkit.org/repositories/openvino/packages/2026.4.1/linux/openvino_toolkit_ubuntu24_2026.4.1.22982.07f9c262b05_x86_64.tgz \
+    && echo "772ce52d9b0aa375c77d391fccea71450d889c98b9af197bb8f05167a9dabd87  /tmp/openvino.tgz" | sha256sum -c - \
+    && mkdir -p /opt/intel/openvino \
+    && tar -xzf /tmp/openvino.tgz -C /opt/intel/openvino --strip-components=1 \
+        --wildcards '*/runtime/*' '*/docs/licensing/*' \
+    && rm /tmp/openvino.tgz \
+    && printf '%s\n' /opt/intel/openvino/runtime/lib/intel64 /opt/intel/openvino/runtime/3rdparty/tbb/lib \
+        > /etc/ld.so.conf.d/openvino.conf \
+    && ldconfig
+ENV OpenVINO_DIR=/opt/intel/openvino/runtime/cmake
+
+WORKDIR /src
+COPY . .
+ARG TARGETARCH
+# Parallel compile jobs. The default suits a hosted runner; raise it on a
+# build host with spare cores.
+ARG LIGHTON_BUILD_JOBS=2
+# The cache id names every ABI-sensitive dependency; change it when gRPC,
+# OpenVINO or the toolchain moves.
+RUN --mount=type=cache,id=grpc-lighton-ocr-ubuntu26-openvino2026.4.1-cxx23-grpc1.83.0-${TARGETARCH},target=/build \
+    find /src/src /src/tests /src/proto -type f -exec touch {} + \
+    && cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DLIGHTON_WERROR=ON \
+        -DLIGHTON_OPENVINO=ON \
+    && cmake --build /build --target grpc-lighton-ocr-server markdown_test service_test \
+        config_test placement_test vision_encoder_test openvino_backend_test \
+        export_vision_encoder vision_encoder_parity --parallel ${LIGHTON_BUILD_JOBS} \
+    && ctest --test-dir /build --output-on-failure \
+    && mkdir -p /out/licenses && cp LICENSE /out/licenses/grpc-lighton-ocr-LICENSE \
+    && cp NOTICE /out/licenses/grpc-lighton-ocr-NOTICE \
+    && cp /build/_deps/llama-src/LICENSE /out/licenses/llama.cpp-LICENSE \
+    && cp /build/grpc-lighton-ocr-server /out/ \
+    && mkdir -p /out/tools \
+    && cp /build/export_vision_encoder /build/vision_encoder_parity /out/tools/ \
+    && mkdir -p /out/openvino/lib \
+    && cp -a /opt/intel/openvino/runtime/lib/intel64/libopenvino.so.* \
+        /opt/intel/openvino/runtime/lib/intel64/libopenvino_intel_gpu_plugin.so \
+        /opt/intel/openvino/runtime/lib/intel64/libopenvino_ir_frontend.so.* \
+        /opt/intel/openvino/runtime/lib/intel64/cache.json \
+        /opt/intel/openvino/runtime/3rdparty/tbb/lib/libtbb.so.12* \
+        /out/openvino/lib/ \
+    && cp -a /opt/intel/openvino/docs/licensing /out/licenses/openvino-licensing
+
+FROM ubuntu:26.04
+ENV DEBIAN_FRONTEND=noninteractive
+# The NEO compute runtime (intel-opencl-icd, 26.05, Battlemage-capable) and
+# the OpenCL ICD loader come from Ubuntu's own 26.04 archive; the OpenVINO GPU
+# plugin drives the card through them, and ggml's OpenVINO backend links the
+# loader. The OpenVINO libraries come from the build stage.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates ocl-icd-libopencl1 intel-opencl-icd \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /out/openvino/lib /opt/openvino/lib
+COPY --from=build /out/grpc-lighton-ocr-server /usr/local/bin/grpc-lighton-ocr-server
+COPY --from=build /out/licenses/ /usr/share/licenses/grpc-lighton-ocr/
+RUN echo /opt/openvino/lib > /etc/ld.so.conf.d/grpc-lighton-ocr-openvino.conf && ldconfig \
+    && install -d -o 65532 -g 65532 /var/cache/openvino
+ENV GRPC_LIGHTON_LISTEN_ADDRESS=0.0.0.0:50074 \
+    GRPC_LIGHTON_MODELS_DIR=/models \
+    GRPC_LIGHTON_DEVICE=openvino:GPU
+USER 65532:65532
+EXPOSE 50074
+ENTRYPOINT ["/usr/local/bin/grpc-lighton-ocr-server"]

@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Offline-only model preparation. Not imported or executed by the service.
 Use a Python environment with CPU torch 2.11.0 and transformers 5.5.4.
-Usage: prepare_model.py PINNED_LLAMA_CHECKOUT OUTPUT_DIRECTORY
+Usage: prepare_model.py PINNED_LLAMA_CHECKOUT OUTPUT_DIRECTORY [PRECISION]
+PRECISION is bf16 (default, the CPU backend) or f16 (OpenVINO devices: the
+OpenVINO GPU plugin does not take BF16 weights). Both convert the same pinned
+source files and are checked against models/SHA256SUMS.
 """
 import hashlib
 import json
@@ -12,7 +15,12 @@ import sys
 import urllib.request
 
 root = pathlib.Path(__file__).resolve().parent.parent
-llama, output = map(pathlib.Path, sys.argv[1:])
+if len(sys.argv) not in (3, 4):
+    raise SystemExit(__doc__)
+llama, output = map(pathlib.Path, sys.argv[1:3])
+precision = sys.argv[3] if len(sys.argv) == 4 else 'bf16'
+if precision not in ('bf16', 'f16'):
+    raise SystemExit('PRECISION must be bf16 or f16')
 revision = subprocess.check_output(['git','-C',str(llama),'rev-parse','HEAD'],text=True).strip()
 if revision != 'f3586e66bc916d672773d4a6505513ba91a3595c':
     raise SystemExit('converter checkout must match the pinned native backend revision')
@@ -32,12 +40,13 @@ for artifact in manifest['files']:
     if temp.stat().st_size != artifact['size'] or digest(temp) != artifact['sha256']:
         raise SystemExit('source hash or size mismatch: '+artifact['file'])
     temp.replace(path)
-for name, flags in [('model-bf16.gguf',['--no-mtp']),('vision-bf16.gguf',['--mmproj'])]:
+names = {f'model-{precision}.gguf': ['--no-mtp'], f'vision-{precision}.gguf': ['--mmproj']}
+for name, flags in names.items():
     subprocess.run([sys.executable,str(llama/'convert_hf_to_gguf.py'),str(source),
-        '--outtype','bf16','--outfile',str(output/name),*flags], check=True,
+        '--outtype',precision,'--outfile',str(output/name),*flags], check=True,
         env=dict(os.environ, OMP_NUM_THREADS='2'))
-for line in (root/'models/SHA256SUMS').read_text().splitlines():
-    expected, name = line.split()
-    if digest(output/name) != expected:
+pinned = dict(reversed(line.split()) for line in (root/'models/SHA256SUMS').read_text().splitlines())
+for name in names:
+    if digest(output/name) != pinned[name]:
         raise SystemExit('converted hash mismatch: '+name)
-print('verified source revision and converted model/projector hashes')
+print(f'verified source revision and converted {precision} model/projector hashes')
