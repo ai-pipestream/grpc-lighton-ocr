@@ -25,6 +25,8 @@ RUN --mount=type=cache,id=lighton-cuda13.2-ubuntu24-gcc14-grpc1.83-f3586e66-${TA
 # Build-time tests exercise CPU/control paths without a driver. The temporary
 # loader stub is never copied into the runtime image or used for hardware tests.
 FROM nvidia/cuda:13.2.1-runtime-ubuntu24.04
+ARG GRPC_LIGHTON_REVISION=
+LABEL org.opencontainers.image.revision=${GRPC_LIGHTON_REVISION}
 RUN apt-get update && apt-get install -y --no-install-recommends libssl3t64 ca-certificates \
     && apt-get clean
 # Jetson's driver supplies compatibility; stale container compat hooks fail.
