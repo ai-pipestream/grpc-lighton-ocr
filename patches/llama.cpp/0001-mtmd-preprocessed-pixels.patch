@@ -1,0 +1,38 @@
+diff --git a/tools/mtmd/mtmd.cpp b/tools/mtmd/mtmd.cpp
+index 410881b..e828393 100644
+--- a/tools/mtmd/mtmd.cpp
++++ b/tools/mtmd/mtmd.cpp
+@@ -3006,6 +3006,16 @@ size_t mtmd_image_tokens_get_n_tokens(const mtmd_image_tokens * image_tokens) {
+     return image_tokens->n_tokens();
+ }
+ 
++const float * mtmd_image_tokens_get_pixels(const mtmd_image_tokens * image_tokens, uint32_t * nx, uint32_t * ny) {
++    const auto & entries = image_tokens->batch_f32.entries;
++    if (entries.size() != 1 || entries[0].is_placeholder()) {
++        return nullptr;
++    }
++    *nx = (uint32_t) entries[0].nx();
++    *ny = (uint32_t) entries[0].ny();
++    return entries[0].get_ro_buf().data();
++}
++
+ size_t mtmd_image_tokens_get_nx(const mtmd_image_tokens * image_tokens) {
+     return image_tokens->nx;
+ }
+diff --git a/tools/mtmd/mtmd.h b/tools/mtmd/mtmd.h
+index 3e03142..fa5aa84 100644
+--- a/tools/mtmd/mtmd.h
++++ b/tools/mtmd/mtmd.h
+@@ -293,6 +293,12 @@ MTMD_API size_t       mtmd_image_tokens_get_n_tokens(const mtmd_image_tokens * i
+ MTMD_API const char * mtmd_image_tokens_get_id      (const mtmd_image_tokens * image_tokens); // TODO: deprecate
+ // number of temporal positions (equals to max(t,h,w) for M-RoPE; equals to n_tokens otherwise)
+ MTMD_API llama_pos    mtmd_image_tokens_get_n_pos   (const mtmd_image_tokens * image_tokens); // TODO: deprecate
++// preprocessed pixels of an image chunk, exactly as the vision encoder receives them:
++// interleaved RGB float, (*nx) * (*ny) * 3 values, owned by the chunk
++// returns nullptr when the chunk does not hold exactly one preprocessed image
++// this lets a caller run the vision encoder outside of mtmd and pass the result
++// to mtmd_helper_decode_image_chunk()
++MTMD_API const float * mtmd_image_tokens_get_pixels(const mtmd_image_tokens * image_tokens, uint32_t * nx, uint32_t * ny);
+ 
+ DEPRECATED(MTMD_API size_t mtmd_image_tokens_get_nx(const mtmd_image_tokens * image_tokens),
+            "use mtmd_image_tokens_get_decoder_pos() instead");

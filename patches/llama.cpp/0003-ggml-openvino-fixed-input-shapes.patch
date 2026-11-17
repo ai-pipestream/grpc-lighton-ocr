@@ -1,0 +1,127 @@
+diff --git a/ggml/src/ggml-openvino/ggml-decoder.cpp b/ggml/src/ggml-openvino/ggml-decoder.cpp
+index 10e82f3..05e06eb 100644
+--- a/ggml/src/ggml-openvino/ggml-decoder.cpp
++++ b/ggml/src/ggml-openvino/ggml-decoder.cpp
+@@ -67,6 +67,7 @@ GgmlOvDecoder::GgmlOvDecoder(ggml_cgraph * cgraph,
+     set_input_output();
+     compute_node_dynamic_dims();
+     compute_model_inputs();
++    record_fixed_inputs();
+     compute_model_outputs();
+ 
+     for (int node_n = 0; node_n < cgraph->n_nodes; node_n++) {
+@@ -77,6 +78,54 @@ GgmlOvDecoder::GgmlOvDecoder(ggml_cgraph * cgraph,
+     add_extra_inputs();
+ }
+ 
++static const ggml_tensor * view_root(const ggml_tensor * tensor) {
++    while (tensor != nullptr && tensor->op == GGML_OP_VIEW && tensor->src[0] != nullptr) {
++        tensor = tensor->src[0];
++    }
++    return tensor;
++}
++
++// Runs once, on the graph the model is converted from. update_io() rebinds the decoder to
++// later graphs and must not move this record with it.
++void GgmlOvDecoder::record_fixed_inputs() {
++    m_fixed_inputs.clear();
++    for (const auto & [name, tensor] : m_inputs) {
++        const auto input = m_model_inputs.find(name);
++        if (input == m_model_inputs.end() || !input->second.shape.is_static()) {
++            continue;
++        }
++        bool found = false;
++        for (int n = 0; n < m_cgraph->n_nodes && !found; n++) {
++            for (int j = 0; j < GGML_MAX_SRC && !found; j++) {
++                const ggml_tensor * src = m_cgraph->nodes[n]->src[j];
++                if (src == nullptr || (src != tensor && view_root(src) != tensor)) {
++                    continue;
++                }
++                FixedInput fixed{n, j, src != tensor, {}};
++                std::copy(std::begin(tensor->ne), std::end(tensor->ne), std::begin(fixed.ne));
++                m_fixed_inputs.push_back(fixed);
++                found = true;
++            }
++        }
++    }
++}
++
++bool GgmlOvDecoder::fixed_inputs_match(const ggml_cgraph * cgraph) const {
++    for (const auto & fixed : m_fixed_inputs) {
++        if (fixed.node >= cgraph->n_nodes) {
++            return false;
++        }
++        const ggml_tensor * tensor = cgraph->nodes[fixed.node]->src[fixed.src];
++        if (fixed.through_views) {
++            tensor = view_root(tensor);
++        }
++        if (tensor == nullptr || !std::equal(std::begin(fixed.ne), std::end(fixed.ne), std::begin(tensor->ne))) {
++            return false;
++        }
++    }
++    return true;
++}
++
+ void GgmlOvDecoder::update_io(ggml_cgraph * cgraph) {
+     m_cgraph = cgraph;
+     m_model_inputs.clear();
+diff --git a/ggml/src/ggml-openvino/ggml-decoder.h b/ggml/src/ggml-openvino/ggml-decoder.h
+index a614d29..8b81048 100644
+--- a/ggml/src/ggml-openvino/ggml-decoder.h
++++ b/ggml/src/ggml-openvino/ggml-decoder.h
+@@ -341,6 +341,12 @@ public:
+ 
+     ModelParams get_model_params() const { return m_model_params; }
+ 
++    // True when every input that this decoder's model was converted with at a fixed shape has
++    // the same shape in cgraph. The context-local graph key holds no shapes, so a graph of the
++    // same topology with a differently sized fixed input (an image, a mel spectrogram) finds
++    // this decoder; its compiled model does not fit that input.
++    bool fixed_inputs_match(const ggml_cgraph * cgraph) const;
++
+     ComputeParams get_compute_params() const { return m_compute_params; }
+ 
+     void set_model_params(const ModelParams & model_params) { m_model_params = model_params; }
+@@ -492,6 +498,19 @@ private:
+     ggml_cgraph * m_cgraph = nullptr;
+     std::map<std::string, ggml_tensor *> m_inputs;
+ 
++    // Inputs converted with a fully static shape, by their place in the converted graph: the
++    // source slot of a node (the graph a backend receives is a scheduler split and lists no
++    // leafs), reached through VIEWs when through_views is set. Dynamic inputs (tokens,
++    // positions, masks, KV) are left out: reuse across their sizes is the point of the cache.
++    struct FixedInput {
++        int node;
++        int src;
++        bool through_views;
++        int64_t ne[GGML_MAX_DIMS];
++    };
++    std::vector<FixedInput> m_fixed_inputs;
++    void record_fixed_inputs();
++
+     std::map<std::string, ov::frontend::ggml::ModelInputInfo> m_model_inputs;
+     std::map<std::string, ov::frontend::ggml::ModelExtraInputInfo> m_model_extra_inputs;
+     std::map<std::string, std::shared_ptr<ov::Node>> m_model_weights;
+diff --git a/ggml/src/ggml-openvino/utils.cpp b/ggml/src/ggml-openvino/utils.cpp
+index f07e180..a547863 100644
+--- a/ggml/src/ggml-openvino/utils.cpp
++++ b/ggml/src/ggml-openvino/utils.cpp
+@@ -910,6 +910,9 @@ enum ggml_status ov_graph_compute_dynamic(ggml_cgraph * cgraph, const std::share
+             if (!ggml_decoder->is_splited_model()) {
+                 cache_hit = old_m_params.can_reuse_dynamically(m_params);
+             }
++            // The key has no shapes. Same topology with another fixed input size is a miss:
++            // the branch below converts this graph and replaces the entry.
++            cache_hit = cache_hit && ggml_decoder->fixed_inputs_match(cgraph);
+         }
+ 
+         std::vector<std::string> ov_input_names;
+@@ -1486,7 +1489,7 @@ enum ggml_status ov_graph_compute_static(ggml_cgraph * cgraph, const std::shared
+     if (cache_hit) {
+         ggml_decoder = entry->ptr;
+         old_m_params = ggml_decoder->get_model_params();
+-        cache_hit = old_m_params.can_reuse_statically(m_params);
++        cache_hit = old_m_params.can_reuse_statically(m_params) && ggml_decoder->fixed_inputs_match(cgraph);
+     }
+ 
+     std::vector<std::string> ov_input_names_local;

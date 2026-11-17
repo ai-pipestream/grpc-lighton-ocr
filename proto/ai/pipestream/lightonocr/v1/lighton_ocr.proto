@@ -186,6 +186,9 @@ message InferenceProvenance {
   string device = 6;
   // Host or container instance that performed inference.
   string server_instance = 7;
+  // SHA256 of the weights file of the exported vision encoder an accelerator
+  // runs in place of the vision GGUF's own graph. Empty on cpu.
+  string vision_encoder_sha256 = 8;
 }
 
 // Why a page stopped generating or could not become a complete document.

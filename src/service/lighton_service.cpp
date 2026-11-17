@@ -74,6 +74,7 @@ void provenance(const EngineInfo& engine, locrv1::InferenceProvenance* out) {
   out->set_service_version("0.1.0"); out->set_backend_revision(kBackendRevision);
   out->set_model_revision(kModelRevision); out->set_model_sha256(engine.model_sha256);
   out->set_projector_sha256(engine.projector_sha256); out->set_device(engine.device);
+  out->set_vision_encoder_sha256(engine.vision_encoder_sha256);
   std::array<char, 256> hostname{};
   if (::gethostname(hostname.data(), hostname.size() - 1) == 0) out->set_server_instance(hostname.data());
 }

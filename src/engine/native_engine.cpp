@@ -1,5 +1,6 @@
 #include "engine/native_engine.h"
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <mutex>
 #include <vector>
@@ -14,6 +15,7 @@
 #include "mtmd.h"
 #include "mtmd-helper.h"
 #include "stb_image.h"
+#include "vision/openvino_encoder.h"
 namespace lighton {
 namespace {
 using Clock = std::chrono::steady_clock;
@@ -57,6 +59,15 @@ constexpr unsigned char kReferencePage[] = {
 };
 constexpr std::string_view kReferenceWords[] = {"INVOICE", "1042", "125.00", "Paid"};
 constexpr uint32_t kProbeTokens = 96;
+// The variable ggml's OpenVINO backend reads for its compiled-kernel cache;
+// the vision encoder uses the same directory.
+constexpr char kOpenvinoCacheEnv[] = "GGML_OPENVINO_CACHE_DIR";
+// ggml_backend_sched_eval_callback that counts the nodes a scheduler is
+// about to compute and asks for none of them.
+bool count_nodes(ggml_tensor*, bool ask, void* counter) {
+  if (ask) ++*static_cast<uint64_t*>(counter);
+  return !ask;
+}
 }
 struct NativeEngine::Impl {
   std::mutex mutex;
@@ -70,31 +81,49 @@ struct NativeEngine::Impl {
   std::array<llama_model_tensor_buft_override, 2> on_device{};
   uint64_t decoder_cpu_nodes = 0;  // nodes the ggml CPU backend computed for the decoder
   // Set only on an accelerator. They outlive the contexts that call them.
-  std::unique_ptr<PlacementRecorder> vision_placement, decoder_placement;
+  std::unique_ptr<PlacementRecorder> decoder_placement;
+  // The vision stage of an accelerator. mtmd still prepares the page and the
+  // prompt there, but its own encoder, which is host code, must not run: this
+  // counts the nodes it computed.
+  std::unique_ptr<vision::OpenvinoEncoder> encoder;
+  uint64_t projector_host_nodes = 0;
+  bool encoded = false;  // the encoder ran since the last reset
   std::unique_ptr<llama_model, decltype(&llama_model_free)> model{nullptr, llama_model_free};
   std::unique_ptr<mtmd_context, decltype(&mtmd_free)> vision{nullptr, mtmd_free};
-
+  void load_vision(const EngineOptions& options);
+  llama_context_params context_params() const;
+  // Tokens or embeddings per decoder call. On an accelerator the prompt of a
+  // page goes in as one batch: on the Intel GPU the ggml OpenVINO backend
+  // gives a different, incomplete reading when a page's embeddings arrive in
+  // several batches (docs/vision-encoder.md).
+  int32_t batch_size() const { return device != nullptr ? static_cast<int32_t>(kContext) : 512; }
   void generate(const mtmd_bitmap* bitmap, uint32_t max_tokens, float temperature,
                 Control& control, NativeResult& result);
+  int32_t prefill(llama_context* ctx, const mtmd_input_chunks* chunks, llama_pos* past);
+  int32_t prefill_page(llama_context* ctx, const mtmd_input_chunk* chunk, llama_pos* past);
   void reset_placement();
   std::string require_device_placement(bool require_both_stages);
   void probe_placement();
 };
 void NativeEngine::Impl::reset_placement() {
-  if (vision_placement) vision_placement->take();
   if (decoder_placement) decoder_placement->take();
   decoder_cpu_nodes = 0;
+  projector_host_nodes = 0;
+  encoded = false;
 }
 // Throws unless everything recorded since the last reset was on the device.
 // Returns the receipt. A no-op on the CPU backend.
 std::string NativeEngine::Impl::require_device_placement(bool require_both_stages) {
-  if (!vision_placement) return {};
-  const PlacementReport vision_report = vision_placement->take();
+  if (!decoder_placement) return {};
   const PlacementReport decoder_report = decoder_placement->take();
-  const std::string receipt = "vision: " + vision_report.summary() + " | decoder: " + decoder_report.summary() +
-      ", " + std::to_string(decoder_cpu_nodes) + " nodes computed by the ggml CPU backend";
-  const bool unobserved = vision_report.device_nodes == 0 || decoder_report.device_nodes == 0;
-  if (vision_report.clean() && decoder_report.clean() && decoder_cpu_nodes == 0 &&
+  // The encoder checks its own placement when it compiles a page size and
+  // throws there; what is left to check is that it, and not mtmd, encoded.
+  const std::string receipt =
+      "vision: " + (encoded ? encoder->placement().summary() : std::string("not run")) + ", " +
+      std::to_string(projector_host_nodes) + " nodes computed by the host projector | decoder: " +
+      decoder_report.summary() + ", " + std::to_string(decoder_cpu_nodes) + " nodes computed by the ggml CPU backend";
+  const bool unobserved = !encoded || decoder_report.device_nodes == 0;
+  if (projector_host_nodes == 0 && decoder_report.clean() && decoder_cpu_nodes == 0 &&
       !(require_both_stages && unobserved))
     return receipt;
   const std::string message = "inference left device " + info.device + ": " + receipt;
@@ -133,7 +162,7 @@ NativeEngine::NativeEngine(const EngineOptions& options) : impl_(std::make_uniqu
   impl_->projector = options.directory + "/" + artifacts.projector;
   verify(text, artifacts.model_sha256); verify(impl_->projector, artifacts.projector_sha256);
   impl_->info = {describe_device(options.device, impl_->device), artifacts.model_sha256,
-                 artifacts.projector_sha256, {}};
+                 artifacts.projector_sha256, {}, {}};
   static std::once_flag initialized;
   std::call_once(initialized, [] { llama_backend_init(); });
   const bool accelerated = impl_->device != nullptr;
@@ -150,25 +179,92 @@ NativeEngine::NativeEngine(const EngineOptions& options) : impl_(std::make_uniqu
   }
   impl_->model.reset(llama_model_load_from_file(text.c_str(), params));
   if (!impl_->model) throw std::runtime_error("native model load failed");
-  auto vp = mtmd_context_params_default(); vp.use_gpu = accelerated; vp.device = impl_->device;
-  vp.warmup = false; vp.n_threads = impl_->threads; vp.image_max_tokens = 2048;
+  impl_->load_vision(options);
+  if (accelerated) impl_->probe_placement();
+}
+llama_context_params NativeEngine::Impl::context_params() const {
+  auto cp = llama_context_default_params();
+  cp.n_ctx = kContext; cp.n_batch = batch_size(); cp.n_ubatch = batch_size();
+  cp.n_threads = threads; cp.n_threads_batch = threads;
+  if (decoder_placement) {
+    cp.cb_eval = PlacementRecorder::on_eval;
+    cp.cb_eval_user_data = decoder_placement.get();
+  }
+  return cp;
+}
+// mtmd always loads the projector file into host memory: it resizes and
+// normalizes the page and lays out the prompt. On the CPU engine it also
+// encodes. On an accelerator the exported encoder does, on that device, and
+// the decoder gets its placement recorder.
+void NativeEngine::Impl::load_vision(const EngineOptions& options) {
+  const bool accelerated = device != nullptr;
+  auto vp = mtmd_context_params_default(); vp.use_gpu = false; vp.device = nullptr;
+  vp.warmup = false; vp.n_threads = threads; vp.image_max_tokens = 2048;
   if (accelerated) {
-    impl_->vision_placement = std::make_unique<PlacementRecorder>(impl_->device);
-    impl_->decoder_placement = std::make_unique<PlacementRecorder>(impl_->device);
+    const std::string xml = options.directory + "/" + kF16Encoder.xml, bin = options.directory + "/" + kF16Encoder.bin;
+    verify(xml, kF16Encoder.xml_sha256); verify(bin, kF16Encoder.bin_sha256);
+    const char* cache = std::getenv(kOpenvinoCacheEnv);
+    // f32: the arithmetic that reproduces the CPU engine's encoder most
+    // closely (docs/vision-encoder.md). The encoder is a small part of a page.
+    encoder = std::make_unique<vision::OpenvinoEncoder>(vision::EncoderOptions{
+        .xml_path = xml,
+        .bin_path = bin,
+        .device = options.device.openvino_device,
+        .cache_dir = cache == nullptr ? "" : cache,
+        .precision = vision::EncoderPrecision::f32});
+    info.vision_encoder_sha256 = kF16Encoder.bin_sha256;
     // The recorder never asks for per-node data, so the device receives each
     // graph whole. Cancellation is checked between stages and tokens.
-    vp.cb_eval = PlacementRecorder::on_eval;
-    vp.cb_eval_user_data = impl_->vision_placement.get();
+    decoder_placement = std::make_unique<PlacementRecorder>(device);
+    vp.cb_eval = count_nodes;
+    vp.cb_eval_user_data = &projector_host_nodes;
   } else {
-    vp.cb_eval_user_data = impl_.get();
+    vp.cb_eval_user_data = this;
     vp.cb_eval = [](ggml_tensor*, bool ask, void* opaque) {
       auto* state = static_cast<Impl*>(opaque);
       return ask || state->active == nullptr || !state->active->stop();
     };
   }
-  impl_->vision.reset(mtmd_init_from_file(impl_->projector.c_str(), impl_->model.get(), vp));
-  if (!impl_->vision) throw std::runtime_error("native projector load failed");
-  if (accelerated) impl_->probe_placement();
+  vision.reset(mtmd_init_from_file(projector.c_str(), model.get(), vp));
+  if (!vision) throw std::runtime_error("native projector load failed");
+  if (encoder && encoder->out_hidden() != static_cast<uint32_t>(llama_model_n_embd_inp(model.get())))
+    throw std::runtime_error("vision encoder embedding width does not match the text model");
+}
+// Prefill of one page chunk on an accelerator: the page mtmd prepared goes
+// through the exported encoder, and the embeddings into the decoder.
+int32_t NativeEngine::Impl::prefill_page(llama_context* ctx, const mtmd_input_chunk* chunk, llama_pos* past) {
+  uint32_t width = 0, height = 0;
+  const float* pixels = mtmd_image_tokens_get_pixels(mtmd_input_chunk_get_tokens_image(chunk), &width, &height);
+  if (pixels == nullptr) throw std::runtime_error("native page preprocessing produced no single image");
+  std::vector<float> embeddings;
+  try {
+    embeddings = encoder->encode({pixels, static_cast<size_t>(width) * height * 3}, width, height);
+  } catch (const std::exception& error) {
+    // Includes a page size the device would not take whole: never the host.
+    std::cerr << "grpc-lighton-ocr vision encoder failure: " << error.what() << '\n';
+    throw EngineError(EngineError::inference, error.what());
+  }
+  encoded = true;
+  if (embeddings.size() != mtmd_input_chunk_get_n_tokens(chunk) * encoder->out_hidden())
+    throw std::runtime_error("vision encoder token count differs from the prompt layout");
+  active->check();
+  return mtmd_helper_decode_image_chunk(vision.get(), ctx, chunk, embeddings.data(), *past, 0, batch_size(), past,
+                                        nullptr, nullptr);
+}
+// The prompt into the decoder. Without an encoder of our own this is
+// mtmd_helper_eval_chunks; with one, the same walk with the page chunk
+// encoded on the device.
+int32_t NativeEngine::Impl::prefill(llama_context* ctx, const mtmd_input_chunks* chunks, llama_pos* past) {
+  if (!encoder) return mtmd_helper_eval_chunks(vision.get(), ctx, chunks, 0, 0, batch_size(), true, past);
+  const size_t count = mtmd_input_chunks_size(chunks);
+  for (size_t i = 0; i < count; ++i) {
+    const mtmd_input_chunk* chunk = mtmd_input_chunks_get(chunks, i);
+    const int32_t status = mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_IMAGE
+        ? prefill_page(ctx, chunk, past)
+        : mtmd_helper_eval_chunk_single(vision.get(), ctx, chunk, *past, 0, batch_size(), i + 1 == count, past);
+    if (status != 0) return status;
+  }
+  return 0;
 }
 NativeEngine::~NativeEngine() = default;
 const EngineInfo& NativeEngine::info() const { return impl_->info; }
@@ -213,20 +309,11 @@ void NativeEngine::Impl::generate(const mtmd_bitmap* bitmap, uint32_t max_tokens
                                   Control& control, NativeResult& result) {
     active = &control;
     struct ClearActive { Impl* state; ~ClearActive() { state->active = nullptr; } } clear{this};
-    auto cp = llama_context_default_params();
-    cp.n_ctx = kContext; cp.n_batch = 512; cp.n_ubatch = 512;
-    cp.n_threads = threads; cp.n_threads_batch = threads;
+    auto cp = context_params();
     DecodeWatch watch{&control};
     struct KeepCount { Impl* state; DecodeWatch* watch; ~KeepCount() { state->decoder_cpu_nodes += watch->cpu_nodes; } }
         keep{this, &watch};
     cp.abort_callback = abort_decode; cp.abort_callback_data = &watch;
-    if (decoder_placement) {
-      cp.cb_eval = PlacementRecorder::on_eval;
-      cp.cb_eval_user_data = decoder_placement.get();
-    }
-    std::unique_ptr<llama_context, decltype(&llama_free)> ctx(
-        llama_init_from_model(model.get(), cp), llama_free);
-    if (!ctx) throw std::runtime_error("native decoder context failed");
     auto* vision = this->vision.get();
     control.check();
     // Exact single-user, no-tools, thinking-disabled Qwen3.5 chat-template
@@ -241,8 +328,16 @@ void NativeEngine::Impl::generate(const mtmd_bitmap* bitmap, uint32_t max_tokens
       throw std::runtime_error("native multimodal tokenization failed");
     if (mtmd_helper_get_n_tokens(chunks.get()) + max_tokens > cp.n_ctx)
       throw EngineError(EngineError::budget, "prompt exceeds context budget");
+    // A context per page, on every device. On an accelerator that also means
+    // the device backend compiles the text model's graphs for each page: it
+    // frees them with its last instance, which is this context, and reusing
+    // them across pages of different sizes crashed it (docs/vision-encoder.md).
+    std::unique_ptr<llama_context, decltype(&llama_free)> page_context(
+        llama_init_from_model(model.get(), cp), llama_free);
+    llama_context* const ctx = page_context.get();
+    if (ctx == nullptr) throw std::runtime_error("native decoder context failed");
     llama_pos past = 0;
-    if (mtmd_helper_eval_chunks(vision, ctx.get(), chunks.get(), 0, 0, 512, true, &past)) {
+    if (prefill(ctx, chunks.get(), &past)) {
       control.check();
       throw std::runtime_error("native multimodal prefill failed");
     }
@@ -257,14 +352,14 @@ void NativeEngine::Impl::generate(const mtmd_bitmap* bitmap, uint32_t max_tokens
     }
     const auto* vocab = llama_model_get_vocab(model.get());
     std::unique_ptr<llama_batch_ext, decltype(&llama_batch_ext_free)> batch(
-        llama_batch_ext_init(ctx.get()), llama_batch_ext_free);
+        llama_batch_ext_init(ctx), llama_batch_ext_free);
     bool complete = false;
     size_t trace_bytes = 0;
     for (uint32_t i = 0; i < max_tokens; ++i) {
       if (control.cancelled()) throw EngineError(EngineError::cancelled, "client cancelled inference");
       if (Clock::now() >= control.deadline) { result.finish = NativeFinish::deadline; return; }
-      llama_token token = llama_sampler_sample(sampler.get(), ctx.get(), -1);
-      const float* logits = llama_get_logits_ith(ctx.get(), -1);
+      llama_token token = llama_sampler_sample(sampler.get(), ctx, -1);
+      const float* logits = llama_get_logits_ith(ctx, -1);
       const int count = llama_vocab_n_tokens(vocab);
       const int top = static_cast<int>(std::max_element(logits, logits + count) - logits);
       double sum = 0;
@@ -295,7 +390,7 @@ void NativeEngine::Impl::generate(const mtmd_bitmap* bitmap, uint32_t max_tokens
           !llama_batch_ext_set_output_logits(batch.get(), index, true))
         throw std::runtime_error("native batch setup failed");
       ++past;
-      if (llama_process(ctx.get(), LLAMA_PROCESS_TYPE_DECODE, batch.get())) {
+      if (llama_process(ctx, LLAMA_PROCESS_TYPE_DECODE, batch.get())) {
         if (control.cancelled()) throw EngineError(EngineError::cancelled, "client cancelled inference");
         result.finish = Clock::now() >= control.deadline ? NativeFinish::deadline : NativeFinish::engine_error;
         return;

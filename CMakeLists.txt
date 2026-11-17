@@ -68,9 +68,23 @@ set(LLAMA_BUILD_MTMD ON CACHE BOOL "" FORCE)
 set(LLAMA_OPENSSL OFF CACHE BOOL "" FORCE)
 set(LLAMA_SUBPROCESS OFF CACHE BOOL "" FORCE)
 set(MTMD_VIDEO OFF CACHE BOOL "" FORCE)
+# The pinned revision with the patches under patches/llama.cpp on top; see
+# cmake/PatchLlama.cmake for how they are applied. Their combined hash is
+# part of the patch command, so a changed patch runs the step again.
+file(GLOB LIGHTON_LLAMA_PATCHES "${CMAKE_CURRENT_SOURCE_DIR}/patches/llama.cpp/*.patch")
+list(SORT LIGHTON_LLAMA_PATCHES)
+set(LIGHTON_LLAMA_PATCH_HASH "")
+foreach(patch IN LISTS LIGHTON_LLAMA_PATCHES)
+  file(SHA256 "${patch}" patch_hash)
+  string(SHA256 LIGHTON_LLAMA_PATCH_HASH "${LIGHTON_LLAMA_PATCH_HASH}${patch_hash}")
+endforeach()
 FetchContent_Declare(llama
   GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git
   GIT_TAG f3586e66bc916d672773d4a6505513ba91a3595c
+  PATCH_COMMAND ${CMAKE_COMMAND} -DLLAMA_SOURCE_DIR=<SOURCE_DIR>
+                -DPATCH_DIR=${CMAKE_CURRENT_SOURCE_DIR}/patches/llama.cpp
+                -DPATCH_HASH=${LIGHTON_LLAMA_PATCH_HASH}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchLlama.cmake
   SYSTEM)
 FetchContent_MakeAvailable(llama)
 
@@ -135,6 +149,18 @@ string(REGEX REPLACE "(..)" "0x\\1," LIGHTON_REFERENCE_PAGE_BYTES "${LIGHTON_REF
 file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/reference/reference_page.inc"
   CONTENT "${LIGHTON_REFERENCE_PAGE_BYTES}\n" @ONLY)
 
+# The vision stage of an OpenVINO device: the exported encoder, run through
+# the OpenVINO runtime. A build without OpenVINO gets a stand-in that cannot
+# be constructed.
+if(LIGHTON_OPENVINO)
+  add_library(lighton_vision STATIC src/vision/openvino_encoder.cpp)
+  target_link_libraries(lighton_vision PRIVATE openvino::runtime)
+else()
+  add_library(lighton_vision STATIC src/vision/no_encoder.cpp)
+endif()
+target_include_directories(lighton_vision PUBLIC src)
+lighton_warnings(lighton_vision)
+
 add_library(lighton_service STATIC
   src/engine/native_engine.cpp
   src/config.cpp
@@ -142,8 +168,28 @@ add_library(lighton_service STATIC
 target_include_directories(lighton_service PUBLIC src)
 target_include_directories(lighton_service SYSTEM PRIVATE "${llama_SOURCE_DIR}/vendor/stb")
 target_include_directories(lighton_service PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/reference")
-target_link_libraries(lighton_service PUBLIC lighton_parse lighton_device llama mtmd)
+target_link_libraries(lighton_service PUBLIC lighton_parse lighton_device lighton_vision llama mtmd)
 lighton_warnings(lighton_service)
+
+if(LIGHTON_OPENVINO)
+  # Model preparation, not part of the server: builds the encoder graph from
+  # the projector file's weights and writes the IR the server reads.
+  add_library(lighton_vision_export STATIC
+    src/vision/encoder_model.cpp
+    src/vision/gguf_weights.cpp)
+  target_include_directories(lighton_vision_export PUBLIC src)
+  target_link_libraries(lighton_vision_export PUBLIC ggml openvino::runtime)
+  lighton_warnings(lighton_vision_export)
+
+  add_executable(export_vision_encoder tools/export_vision_encoder.cpp)
+  target_link_libraries(export_vision_encoder PRIVATE lighton_vision_export)
+  lighton_warnings(export_vision_encoder)
+
+  # Qualification: the exported encoder against the ggml CPU encoder.
+  add_executable(vision_encoder_parity tools/vision_encoder_parity.cpp)
+  target_link_libraries(vision_encoder_parity PRIVATE lighton_vision llama mtmd)
+  lighton_warnings(vision_encoder_parity)
+endif()
 
 add_executable(grpc-lighton-ocr-server src/main.cpp)
 target_link_libraries(grpc-lighton-ocr-server PRIVATE lighton_service grpc++_reflection)
@@ -171,6 +217,21 @@ if(BUILD_TESTING)
   target_link_libraries(placement_test PRIVATE lighton_device)
   lighton_warnings(placement_test)
   add_test(NAME placement_test COMMAND placement_test)
+
+  if(LIGHTON_OPENVINO)
+    # A small encoder with made-up weights, exported and run on the OpenVINO
+    # CPU device, against a plain C++ evaluation of the same arithmetic.
+    add_executable(vision_encoder_test tests/vision_encoder_test.cpp)
+    target_link_libraries(vision_encoder_test PRIVATE lighton_vision lighton_vision_export)
+    lighton_warnings(vision_encoder_test)
+    add_test(NAME vision_encoder_test COMMAND vision_encoder_test)
+
+    # The carried ggml OpenVINO backend fixes, on the OpenVINO CPU device.
+    add_executable(openvino_backend_test tests/openvino_backend_test.cpp)
+    target_link_libraries(openvino_backend_test PRIVATE ggml)
+    lighton_warnings(openvino_backend_test)
+    add_test(NAME openvino_backend_test COMMAND openvino_backend_test)
+  endif()
 endif()
 
 # Explicit qualification gate: supplied models are required, never skipped.

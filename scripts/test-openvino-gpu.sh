@@ -7,10 +7,11 @@
 #
 # Needs a host with an Intel GPU render node (/dev/dri/renderD*), docker,
 # grpcurl and python3. MODEL_DIRECTORY holds model-f16.gguf and
-# vision-f16.gguf (tools/prepare_model.py ... f16). Without a render node or
-# without the F16 artifacts the test FAILS; it never skips, so a host that
-# lost its GPU cannot pass. LIGHTON_RENDER_GID is the host gid of the render
-# node (default: read with stat).
+# vision-f16.gguf (tools/prepare_model.py ... f16) and the exported encoder,
+# vision-encoder-f16.xml and .bin (scripts/export-vision-encoder.sh). Without
+# a render node or without those artifacts the test FAILS; it never skips, so
+# a host that lost its GPU cannot pass. LIGHTON_RENDER_GID is the host gid of
+# the render node (default: read with stat).
 #
 # Checks, in order:
 #   1. no /dev/dri in the container: startup must fail and name the missing
@@ -44,8 +45,9 @@ fail() { echo "openvino-gpu: FAIL: $*" >&2; exit 1; }
 
 render=$(ls /dev/dri/renderD* 2>/dev/null | head -1 || true)
 [[ -n "$render" ]] || fail "no /dev/dri/renderD* on this host; this test needs the Intel GPU"
-for artifact in model-f16.gguf vision-f16.gguf; do
-  [[ -f "$models/$artifact" ]] || fail "$models/$artifact is missing (tools/prepare_model.py ... f16)"
+for artifact in model-f16.gguf vision-f16.gguf vision-encoder-f16.xml vision-encoder-f16.bin; do
+  [[ -f "$models/$artifact" ]] ||
+    fail "$models/$artifact is missing (tools/prepare_model.py ... f16, scripts/export-vision-encoder.sh)"
 done
 gid=${LIGHTON_RENDER_GID:-$(stat -c %g "$render")}
 gpu_args=(--device /dev/dri:/dev/dri --group-add "$gid")
@@ -105,15 +107,19 @@ done
 docker logs "$server" > "$work/boot.log" 2>&1
 grep -q "listening on" "$work/boot.log" || fail "server did not reach its listener in 900 s"
 grep -E "^grpc-lighton-ocr device: " "$work/boot.log" || fail "no device line in the startup log"
-grep -qE "^grpc-lighton-ocr device: openvino:GPU - .+ startup placement probe: vision: [1-9][0-9]* compute nodes .+ decoder: [1-9][0-9]* compute nodes .+, 0 nodes computed by the ggml CPU backend" \
+grep -qE "^grpc-lighton-ocr device: openvino:GPU - .+ startup placement probe: vision: [0-9]+x[0-9]+: [1-9][0-9]* nodes on GPU(\.[0-9]+)?, 0 nodes computed by the host projector \| decoder: [1-9][0-9]* compute nodes .+, 0 nodes computed by the ggml CPU backend" \
   "$work/boot.log" || fail "the startup log has no clean placement receipt for the GPU"
 ! grep -q "NOT on the device" "$work/boot.log" || fail "the startup probe saw nodes off the GPU"
 
-echo "GPU memory after startup (text model, vision projector, compiled probe graphs): $(gpu_memory)"
+echo "GPU memory after startup (text model, vision encoder, compiled probe graphs): $(gpu_memory)"
 
 address=$(docker port "$server" 50074/tcp)
 before=$(ccs_cycles)
+# A cancelled page is given up between its stages, and on the GPU a stage
+# includes compiling its graph, so the engine is free again within one such
+# step and not within the CPU engine's second.
 LIGHTON_RPC_ADDRESS="$address" LIGHTON_EXPECT_DEVICE=openvino:GPU LIGHTON_BUSY_PAGES=8 \
+  LIGHTON_CANCEL_RECOVERY_SECONDS=15 \
   python3 "$root/tests/native_rpc_test.py" unused "$models"
 after=$(ccs_cycles)
 echo "xe compute-engine cycles: $before -> $after"

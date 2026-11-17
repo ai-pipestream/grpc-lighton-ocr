@@ -8,8 +8,9 @@ LightOnOCR-3 model weights are not included. Their licence is the one
 published with lightonai/LightOnOCR-3-0.8B and lightonai/LightOnOCR-3-4B.
 
 The image built from Dockerfile.openvino additionally contains, unmodified:
-  - the OpenVINO 2026.4.1 runtime library and its Intel GPU plugin (Intel,
-    Apache-2.0) and oneTBB (Apache-2.0), copied from Intel's release archive;
+  - the OpenVINO 2026.4.1 runtime library, its Intel GPU plugin and its IR
+    reader (Intel, Apache-2.0) and oneTBB (Apache-2.0), copied from Intel's
+    release archive;
     their licence texts and third-party notices are in
     /usr/share/licenses/grpc-lighton-ocr/openvino-licensing;
   - as distribution packages that keep their own licence files under
@@ -18,3 +19,6 @@ The image built from Dockerfile.openvino additionally contains, unmodified:
     loader, ocl-icd (BSD-2-Clause).
 llama.cpp (MIT) supplies the ggml OpenVINO backend that is compiled into the
 server in that image.
+
+llama.cpp is built from its pinned revision with the changes under
+patches/llama.cpp applied; patches/llama.cpp/README.md lists them.

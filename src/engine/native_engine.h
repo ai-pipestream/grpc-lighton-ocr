@@ -31,6 +31,12 @@ inline constexpr ModelArtifacts kF16Artifacts{
 inline constexpr const ModelArtifacts& artifacts_for(const DeviceSpec& device) {
   return device.accelerated() ? kF16Artifacts : kBf16Artifacts;
 }
+// The vision encoder an OpenVINO device runs: an OpenVINO IR exported from
+// vision-f16.gguf by tools/export_vision_encoder, see models/SHA256SUMS.
+struct EncoderArtifacts { const char *xml, *xml_sha256, *bin, *bin_sha256; };
+inline constexpr EncoderArtifacts kF16Encoder{
+    "vision-encoder-f16.xml", "069c37e4f2fc4ccbb611333f8cc089a148e5419bc169de913bae86313267a71d",
+    "vision-encoder-f16.bin", "39fe3a5080be77c576263344ffd66bc9d7ead94ba31195cd6c4f0a4d816cd14c"};
 struct EngineOptions {
   std::string directory;
   DeviceSpec device;
@@ -43,14 +49,19 @@ struct EngineInfo {
   std::string device = "cpu";
   std::string model_sha256 = kModelSha;
   std::string projector_sha256 = kProjectorSha;
+  // SHA256 of the OpenVINO vision encoder weights an accelerator runs. Empty
+  // on cpu, where the projector file itself is executed.
+  std::string vision_encoder_sha256;
   // Startup placement receipt for the log. Empty on cpu.
   std::string placement;
 };
 class NativeEngine {
  public:
-  // Loads both artifacts. On an accelerator it then runs the compiled-in
-  // reference page and throws unless every compute node and every weight was
-  // on the device and the page was read correctly.
+  // Loads the artifacts. On an accelerator the vision encoder is the exported
+  // OpenVINO model, compiled for that device alone, and the text model runs
+  // on ggml's OpenVINO backend. The constructor then runs the compiled-in
+  // reference page and throws unless both stages ran on the device only and
+  // the page was read correctly.
   explicit NativeEngine(const EngineOptions& options);
   ~NativeEngine();
   const EngineInfo& info() const;

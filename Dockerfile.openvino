@@ -1,9 +1,12 @@
 # syntax=docker/dockerfile:1.28
-# Intel GPU image: llama.cpp's ggml OpenVINO backend (LIGHTON_OPENVINO=ON).
-# linux/amd64 only. Weights remain external and read-only, as in the CPU
-# Dockerfile. This image expects the F16 artifacts (model-f16.gguf and
-# vision-f16.gguf, see models/MANIFEST): the OpenVINO GPU plugin does not take
-# BF16 weights.
+# Intel GPU image (LIGHTON_OPENVINO=ON): the text model on llama.cpp's ggml
+# OpenVINO backend, the vision encoder as an OpenVINO model run through the
+# OpenVINO runtime. linux/amd64 only. Weights remain external and read-only,
+# as in the CPU Dockerfile. This image expects the F16 artifacts (see
+# models/MANIFEST): model-f16.gguf and vision-f16.gguf, because the OpenVINO
+# GPU plugin does not take BF16 weights, and the encoder exported from
+# vision-f16.gguf, vision-encoder-f16.xml and .bin. The export tool is built
+# in the build stage and stays there (scripts/export-vision-encoder.sh).
 #
 # OpenVINO 2026.4.1 comes from Intel's release archive, checked against a
 # pinned sha256 (the value Intel publishes next to the archive). The pinned
@@ -14,11 +17,12 @@
 # with libigc2 2.28.4, the Battlemage-capable compute runtime the OpenVINO
 # GPU plugin needs for Arc B-series cards.
 #
-# The runtime image takes the OpenVINO runtime library, its GPU plugin and
-# TBB from the build stage, and nothing else of OpenVINO: no CPU plugin and
-# no routing plugin (AUTO, HETERO, MULTI), so there is no OpenVINO device in
-# it that could run a graph on the CPU. The build stage keeps the CPU plugin:
-# the in-build tests run the backend on the OpenVINO CPU device.
+# The runtime image takes the OpenVINO runtime library, its GPU plugin, the
+# reader for the IR format (a file parser, not a device) and TBB from the
+# build stage, and nothing else of OpenVINO: no CPU plugin and no routing
+# plugin (AUTO, HETERO, MULTI), so there is no OpenVINO device in it that
+# could run a graph on the CPU. The build stage keeps the CPU plugin: the
+# in-build tests run on the OpenVINO CPU device.
 #
 #   docker build -f Dockerfile.openvino -t grpc-lighton-ocr:openvino .
 #   docker run --rm --read-only --cap-drop ALL --device /dev/dri \
@@ -31,9 +35,11 @@
 # device is absent or when any graph node is placed on the ggml CPU backend.
 FROM ubuntu:26.04 AS build
 ENV DEBIAN_FRONTEND=noninteractive
+# intel-opencl-icd is not needed to build or to run the in-build tests. It
+# lets the qualification tools kept in this stage (/out/tools) run on a GPU.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates cmake curl g++ git ninja-build pkg-config \
-        ocl-icd-opencl-dev opencl-headers opencl-clhpp-headers \
+        ocl-icd-opencl-dev opencl-headers opencl-clhpp-headers intel-opencl-icd \
     && rm -rf /var/lib/apt/lists/*
 
 # OpenVINO 2026.4.1 runtime, headers, CMake package and its own TBB
@@ -65,15 +71,19 @@ RUN --mount=type=cache,id=grpc-lighton-ocr-ubuntu26-openvino2026.4.1-cxx23-grpc1
     && cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DLIGHTON_WERROR=ON \
         -DLIGHTON_OPENVINO=ON \
     && cmake --build /build --target grpc-lighton-ocr-server markdown_test service_test \
-        config_test placement_test --parallel ${LIGHTON_BUILD_JOBS} \
+        config_test placement_test vision_encoder_test openvino_backend_test \
+        export_vision_encoder vision_encoder_parity --parallel ${LIGHTON_BUILD_JOBS} \
     && ctest --test-dir /build --output-on-failure \
     && mkdir -p /out/licenses && cp LICENSE /out/licenses/grpc-lighton-ocr-LICENSE \
     && cp NOTICE /out/licenses/grpc-lighton-ocr-NOTICE \
     && cp /build/_deps/llama-src/LICENSE /out/licenses/llama.cpp-LICENSE \
     && cp /build/grpc-lighton-ocr-server /out/ \
+    && mkdir -p /out/tools \
+    && cp /build/export_vision_encoder /build/vision_encoder_parity /out/tools/ \
     && mkdir -p /out/openvino/lib \
     && cp -a /opt/intel/openvino/runtime/lib/intel64/libopenvino.so.* \
         /opt/intel/openvino/runtime/lib/intel64/libopenvino_intel_gpu_plugin.so \
+        /opt/intel/openvino/runtime/lib/intel64/libopenvino_ir_frontend.so.* \
         /opt/intel/openvino/runtime/lib/intel64/cache.json \
         /opt/intel/openvino/runtime/3rdparty/tbb/lib/libtbb.so.12* \
         /out/openvino/lib/ \
