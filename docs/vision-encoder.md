@@ -230,8 +230,8 @@ vision encoder; both are described for the backend's maintainers in
    through one decoder context for all pages or through the backend's
    process-wide cache. With batches of 512 the second way did not crash, was
    fast (0.6 s for the invoice, 5 to 9 s for the large pages) and filled the
-   card: each prompt length is compiled into its own graph with its own copy
-   of the weights, 32 GiB after 16 pages. The server therefore uses a decoder
+   card: the backend compiles a graph per prompt length and GPU memory grew
+   with each, to 32 GiB after 16 pages. The server therefore uses a decoder
    context per page, as the CPU engine does. The backend frees its compiled
    graphs with its last context, so every page compiles them again.
 

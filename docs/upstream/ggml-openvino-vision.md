@@ -168,13 +168,15 @@ llama.cpp's own CPU encoder feeding the GPU text model. The OpenVINO CPU
 device gives the CPU backend's text with `n_batch = 512`. Pages of up to 620
 tokens (512 + 108) were not affected.
 
-**One compiled model per prompt length, each with its own weights.** The
+**One compiled model per prompt length, and device memory with each.** The
 process-wide cache is keyed by every tensor's shape (`compiled_graph_key`),
 so a host that creates a context per request compiles the prefill graph again
-for every new number of image tokens, and each compiled graph holds its own
-copy of the weights on the device. A server that kept them all reached the
-card's 32 GB after 16 pages of eight sizes. Within one context the
-shape-free `graph_key` avoids this, which is what fault 2 above is about.
+for every new number of image tokens. A server that kept them all, with
+`n_batch = 512`, held 5.5 GiB of GPU memory after startup, 11.8 GiB after two
+page sizes and the card's 32 GiB after 16 pages of eight sizes, which points
+at a copy of the weights per compiled graph; that was not looked at directly.
+Within one context the backend finds graphs by the shape-free `graph_key`,
+the cache fault 2 above is about.
 
 **A crash when compiled graphs are reused after a page of another size.**
 With a page's prompt in one batch, a server that reused compiled graphs
@@ -184,10 +186,10 @@ number of embeddings, and the crash came in the next graph, the short
 text-token graph, which was reused. It happened in three runs that sent one
 992x288 page and then a 992x640 page (a run that sent two 992x288 pages
 first passed), in two arrangements: one `llama_context`
-for all pages (reuse through the context's own cache, where the prefill graph
-takes patch 3's miss branch), and a context per page with a second, idle
-backend instance keeping the process-wide cache alive (reuse through
-`compiled_graph_key`, where patch 3 plays no part). With `n_batch = 512` the
+for all pages (reuse through the context's own cache; the prefill graph should
+take patch 3's miss branch there, which was not traced), and a context per
+page with a second, idle backend instance keeping the process-wide cache
+alive (reuse through `compiled_graph_key`, where patch 3 plays no part). With `n_batch = 512` the
 second arrangement served 16 pages of eight sizes without a crash. The
 server now lets every page compile its own graphs, which the backend does
 when a page's context is its only instance.
