@@ -1,0 +1,3 @@
+PASS valid-stream cancellation/recovery 0: 3.375s
+PASS valid-stream cancellation/recovery 1: 3.247s
+PASS valid-stream cancellation/recovery 2: 2.763s

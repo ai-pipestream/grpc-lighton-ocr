@@ -1,10 +1,10 @@
 # grpc-lighton-ocr
 
 A diskless streaming gRPC OCR service using native libllama/libmtmd and the
-LightOnOCR-3-0.8B checkpoint on CPU. Request images stay in RAM; inference uses
+LightOnOCR-3-0.8B checkpoint with explicit native device selection. Request images stay in RAM; inference uses
 no Python, subprocess, HTTP model server, or writable request directory.
 
-Only **CPU 0.8B** is enabled. The 4B enum remains on the wire but production
+**CPU 0.8B is the default**. CUDA is an opt-in build and startup backend. The 4B enum remains on the wire but production
 startup rejects it. Table markup is retained as text; typed table extraction
 and continuation-block joining are unfinished. gRParse does not dial this
 service yet. Setting `GRPARSE_LIGHTON_OCR_TARGET` does not enable a route.
@@ -45,6 +45,54 @@ docker build -t grpc-lighton-ocr:local .
 docker run --rm --read-only --cap-drop ALL -p 50074:50074 \
   -v /absolute/path/to/models:/models:ro grpc-lighton-ocr:local
 ```
+
+## Native CUDA
+
+Build both the mtmd vision encoder and llama decoder with `-DLIGHTON_CUDA=ON`.
+Select `GRPC_LIGHTON_BACKEND=cuda` and an exact native device name such as
+`GRPC_LIGHTON_DEVICE=CUDA0`. A missing backend/device fails startup; there is
+no automatic CPU fallback. `GRPC_LIGHTON_BACKEND=cpu` explicitly keeps both
+stages on CPU, including in a CUDA-enabled binary.
+
+```sh
+docker build -f Dockerfile.cuda --build-arg CUDA_ARCHITECTURES=89 \
+  -t grpc-lighton-ocr:cuda .
+docker run --rm --gpus all --read-only --cap-drop ALL -p 50074:50074 \
+  -e GRPC_LIGHTON_DEVICE=CUDA0 \
+  -v /absolute/path/to/models:/models:ro grpc-lighton-ocr:cuda
+```
+
+The CUDA recipe uses CUDA 13.2, GCC 14 and static pinned native dependencies.
+For an Orin-native ARM build select architecture `87`; this build option is
+not an Orin full-model qualification claim. The image still requires host
+NVIDIA driver/container support. Model files remain external and read-only.
+
+`InferenceProvenance.stages` reports observed vision and decoder arithmetic,
+actual native device identity and whether native CPU arithmetic was observed.
+Cold startup reports unverified placement until an inference completes. Each
+page carries its own observations; service info returns one atomic last-request
+snapshot. Host preprocessing and sampling are outside the model arithmetic flag.
+
+The exact-pinned scheduler hook observes submitted nodes without tensor readback.
+Device classification is cached per stage/request; execution counters are reset
+for each inference. `GRPC_LIGHTON_OBSERVE_PLACEMENT=0` disables instrumentation
+for overhead comparisons and deliberately leaves placement **unverified**.
+Phase timing lines separate context setup, preprocessing, prefill, token decode,
+sampling, projection and transport. Do not use disabled observations as hardware
+qualification evidence.
+
+```sh
+python3 tests/hardware_rpc_test.py --candidate localhost:51074 \
+  --cpu localhost:51075 --backend cuda --output /tmp/lighton-paired-new
+python3 tests/hardware_cancellation_test.py --address localhost:51074 \
+  --backend cuda --output /tmp/lighton-cancel-new
+```
+
+The paired gate requires matching artifacts/runtime/host, verified placement,
+known text at authored box locations, five warm repeated two-page requests and
+speedup over a separate explicit CPU server. The cancellation gate requires
+three active valid-stream cancellations followed by full text/geometry recovery;
+it does not infer mid-kernel interruption from client timing.
 
 ## Readiness and limits
 

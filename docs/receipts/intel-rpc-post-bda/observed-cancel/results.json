@@ -1,0 +1,20 @@
+{
+  "mode": "verified-placement",
+  "cycles": [
+    {
+      "repeat": 0,
+      "recovery_seconds": 2.101085683098063,
+      "cancel_exit_code": -2
+    },
+    {
+      "repeat": 1,
+      "recovery_seconds": 2.063128559035249,
+      "cancel_exit_code": -2
+    },
+    {
+      "repeat": 2,
+      "recovery_seconds": 2.0673675859579816,
+      "cancel_exit_code": -2
+    }
+  ]
+}

@@ -180,10 +180,55 @@ message InferenceProvenance {
   string model_sha256 = 4;
   // SHA256 of the loaded vision GGUF.
   string projector_sha256 = 5;
-  // Execution device, currently cpu.
+  // Legacy human-readable execution device summary.
   string device = 6;
   // Host or container instance that performed inference.
   string server_instance = 7;
+  // Runtime placement for each model stage. Empty on older servers.
+  repeated StagePlacement stages = 8;
+}
+
+// A model stage whose placement is reported independently.
+enum InferenceStage {
+  // No stage identified.
+  INFERENCE_STAGE_UNSPECIFIED = 0;
+  // Image encoder and multimodal projection.
+  INFERENCE_STAGE_VISION = 1;
+  // Text prefill and autoregressive decoding.
+  INFERENCE_STAGE_DECODER = 2;
+}
+
+// Native compute implementation used by a model stage.
+enum ComputeBackend {
+  // No implementation identified.
+  COMPUTE_BACKEND_UNSPECIFIED = 0;
+  // Native CPU execution.
+  COMPUTE_BACKEND_CPU = 1;
+  // NVIDIA CUDA execution.
+  COMPUTE_BACKEND_CUDA = 2;
+  // Intel GPU SYCL execution.
+  COMPUTE_BACKEND_SYCL = 3;
+  // Apple GPU Metal execution.
+  COMPUTE_BACKEND_METAL = 4;
+}
+
+// Observed native runtime placement, distinct from requested configuration.
+message StagePlacement {
+  // Model stage being described.
+  InferenceStage stage = 1;
+  // Backend selected by the loaded native runtime for this stage.
+  ComputeBackend backend = 2;
+  // Physical device description obtained from the native runtime.
+  string device_name = 3;
+  // Native runtime device identifier, not a host-global ordinal.
+  string device_id = 4;
+  // True only after native placement inspection, never from config alone.
+  // This does not by itself establish numerical correctness or throughput.
+  bool runtime_verified = 5;
+  // Whether model computation also uses CPU kernels. Host preprocessing,
+  // sampling and orchestration do not count as CPU model computation.
+  // Unset means the runtime has not established this fact.
+  optional bool cpu_compute = 6;
 }
 
 // Why a page stopped generating or could not become a complete document.

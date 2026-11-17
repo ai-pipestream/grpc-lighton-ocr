@@ -1,0 +1,8 @@
+{
+  "source": "bda85f4dd28ac6bad822e11d7673175c0eb504ed",
+  "two_page_seconds": 2.5048646660000005,
+  "two_page_assertions": "PASS",
+  "cancel_recovery_cycles": 3,
+  "cancel_recovery": "PASS",
+  "comparison_repeated": false
+}

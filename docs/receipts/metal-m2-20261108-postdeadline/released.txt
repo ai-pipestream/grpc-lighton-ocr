@@ -1,0 +1,29 @@
+No owned LightOn server remains.
+The system has 25769803776 (1572864 pages with a page size of 16384).
+
+Stats: 
+Pages free: 4285 
+Pages purgeable: 13563 
+Pages purged: 18627349 
+
+Swap I/O:
+Swapins: 922336 
+Swapouts: 1503740 
+
+Page Q counts:
+Pages active: 511934 
+Pages inactive: 511556 
+Pages speculative: 301 
+Pages throttled: 0 
+Pages wired down: 167465 
+
+Compressor Stats:
+Pages used by compressor: 327846 
+Pages decompressed: 133629645 
+Pages compressed: 147201225 
+
+File I/O:
+Pageins: 72251791 
+Pageouts: 141019 
+
+System-wide memory free percentage: 67%

@@ -1,0 +1,34 @@
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security.cc:896:14: error: cannot initialize a variable of type 'X509_NAME *' (aka 'X509_name_st *') with an rvalue of type 'const X509_NAME *' (aka 'const X509_name_st *')
+  896 |   X509_NAME* subject_name = X509_get_subject_name(cert);
+      |              ^              ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security.cc:908:23: error: assigning to 'X509_NAME_ENTRY *' (aka 'X509_name_entry_st *') from 'const X509_NAME_ENTRY *' (aka 'const X509_name_entry_st *') discards qualifiers
+  908 |   common_name_entry = X509_NAME_get_entry(subject_name, common_name_index);
+      |                       ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security.cc:913:22: error: assigning to 'ASN1_STRING *' (aka 'asn1_string_st *') from 'const ASN1_STRING *' (aka 'const asn1_string_st *') discards qualifiers
+  913 |   common_name_asn1 = X509_NAME_ENTRY_get_data(common_name_entry);
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security.cc:954:14: error: cannot initialize a variable of type 'X509_NAME *' (aka 'X509_name_st *') with an rvalue of type 'const X509_NAME *' (aka 'const X509_name_st *')
+  954 |   X509_NAME* subject_name = X509_get_subject_name(cert);
+      |              ^              ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security.cc:1050:40: error: member access into incomplete type 'ASN1_OCTET_STRING' (aka 'asn1_string_st')
+ 1050 |       if (subject_alt_name->d.iPAddress->length == 4) {
+      |                                        ^
+/work/main/grpc-services/worktrees/grpc-asr-intel-sycl/build-deps/root/usr/include/openssl/types.h:57:16: note: forward declaration of 'asn1_string_st'
+   57 | typedef struct asn1_string_st ASN1_INTEGER;
+      |                ^
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security.cc:1052:47: error: member access into incomplete type 'ASN1_OCTET_STRING' (aka 'asn1_string_st')
+ 1052 |       } else if (subject_alt_name->d.iPAddress->length == 16) {
+      |                                               ^
+/work/main/grpc-services/worktrees/grpc-asr-intel-sycl/build-deps/root/usr/include/openssl/types.h:57:16: note: forward declaration of 'asn1_string_st'
+   57 | typedef struct asn1_string_st ASN1_INTEGER;
+      |                ^
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security.cc:1059:69: error: member access into incomplete type 'ASN1_OCTET_STRING' (aka 'asn1_string_st')
+ 1059 |       const char* name = inet_ntop(af, subject_alt_name->d.iPAddress->data,
+      |                                                                     ^
+/work/main/grpc-services/worktrees/grpc-asr-intel-sycl/build-deps/root/usr/include/openssl/types.h:57:16: note: forward declaration of 'asn1_string_st'
+   57 | typedef struct asn1_string_st ASN1_INTEGER;
+      |                ^
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security.cc:1345:19: error: assigning to 'X509_NAME *' (aka 'X509_name_st *') from 'const X509_NAME *' (aka 'const X509_name_st *') discards qualifiers
+ 1345 |       root_name = X509_get_subject_name(root);
+      |                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+8 errors generated.

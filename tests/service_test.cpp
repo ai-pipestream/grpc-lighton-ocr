@@ -10,6 +10,7 @@
 
 #include "ai/pipestream/lightonocr/v1/lighton_ocr.grpc.pb.h"
 #include "config.h"
+#include "engine/inference_control.h"
 #include "service/lighton_service.h"
 
 namespace locrv1 = ai::pipestream::lightonocr::v1;
@@ -47,6 +48,36 @@ Server start(lighton::Config config = {}) {
 }  // namespace
 
 int main() {
+  {
+    lighton::detail::Control expired{lighton::detail::Clock::time_point::min(), [] { return false; }};
+    locrv1::PageFailure failure;
+    failure.mutable_provenance()->set_device("stale-device");
+    failure.mutable_provenance()->add_stages()->set_runtime_verified(true);
+    failure.mutable_generation_trace()->set_text("stale prior page");
+    bool threw = false;
+    try { expired.check(); }
+    catch (const lighton::EngineError& error) {
+      threw = true;
+      expect(error.kind == lighton::EngineError::deadline, "prefill deadline is not client cancellation");
+      lighton::project_engine_error(error, 2, &failure);
+    }
+    expect(threw, "expired control throws before native work");
+    expect(failure.page_no() == 2 && failure.code() == locrv1::PAGE_FAILURE_CODE_RESOURCE_LIMIT,
+           "thrown internal deadline is a typed resource-limit page failure");
+    expect(failure.finish_reason() == locrv1::FINISH_REASON_DEADLINE, "thrown deadline finish reason");
+    expect(failure.provenance().stages_size() == 0 && failure.provenance().device() == "unverified",
+           "thrown deadline cannot reuse prior placement");
+    expect(!failure.has_generation_trace(), "thrown deadline cannot reuse prior generation");
+  }
+  for (const auto& backend : {"cpu", "cuda", "sycl", "metal"}) {
+    bool rejected = false;
+    try { lighton::NativeEngine unavailable("/nonexistent-models", backend, "missing-native-device"); }
+    catch (const std::exception& error) {
+      rejected = std::string(error.what()).find("requested native backend/device unavailable") != std::string::npos;
+    }
+    expect(rejected, std::string(backend) + " unavailable device fails before reading model files");
+  }
+
   for (bool four_b : {false, true}) {
     lighton::Config unavailable;
     unavailable.models_dir = "/nonexistent-lighton-models";
@@ -80,6 +111,14 @@ int main() {
            "token limit retains recoverable document");
     expect(response.page_failure().generation_trace().text() == malformed.raw_text,
            "token limit retains raw output");
+    malformed.finish = lighton::NativeFinish::deadline;
+    response.Clear();
+    lighton::project_native_result(malformed, 1, locrv1::LIGHTON_MODEL_0_8B, 0, &response);
+    expect(response.page_failure().code() == locrv1::PAGE_FAILURE_CODE_RESOURCE_LIMIT &&
+           response.page_failure().finish_reason() == locrv1::FINISH_REASON_DEADLINE,
+           "returned deadline has the same typed resource-limit mapping");
+    expect(response.page_failure().generation_trace().text() == malformed.raw_text,
+           "returned deadline retains current request output");
   }
   Server server = start();
   expect(server.server != nullptr, "server started");

@@ -1,0 +1,90 @@
+{
+  "fixture_sha256": "a3d9057022912f90aa6de461dd60e87dd1ba64557c5c9638e086c8d5795b45f7",
+  "measured_two_page_rpc_seconds": {
+    "cpu": [
+      8.208988044061698,
+      8.506649314891547,
+      9.049890530994162,
+      9.877197582041845,
+      9.97254140197765
+    ],
+    "candidate": [
+      1.9304119849111885,
+      1.999360409914516,
+      1.9453175810631365,
+      1.938829721068032,
+      1.8526552519761026
+    ]
+  },
+  "median_speedup": 4.6677077582702315,
+  "minimum_speedup": 1.0,
+  "info": {
+    "cpu": {
+      "listenAddress": "127.0.0.1:51075",
+      "engineLoaded": true,
+      "modelRepo": "lightonai/LightOnOCR-3-0.8B",
+      "model": "LIGHTON_MODEL_0_8B",
+      "provenance": {
+        "serviceVersion": "0.1.0",
+        "backendRevision": "f3586e66bc916d672773d4a6505513ba91a3595c",
+        "modelRevision": "36d8636925327c671bd8e479c517a004f7566bd9",
+        "modelSha256": "a73ab10d787c68cbfc518f51bfe044abcfb9dc27ce9c457f2068bf7d3ee0241d",
+        "projectorSha256": "a0af0fe69443cfe35edd1294466d0f1d9780682177a101944d0fe8a9f5b72bd4",
+        "device": "cpu",
+        "serverInstance": "krick-1",
+        "stages": [
+          {
+            "stage": "INFERENCE_STAGE_VISION",
+            "backend": "COMPUTE_BACKEND_CPU",
+            "deviceName": "AMD Ryzen 9 9950X 16-Core Processor",
+            "deviceId": "CPU",
+            "runtimeVerified": true,
+            "cpuCompute": true
+          },
+          {
+            "stage": "INFERENCE_STAGE_DECODER",
+            "backend": "COMPUTE_BACKEND_CPU",
+            "deviceName": "AMD Ryzen 9 9950X 16-Core Processor",
+            "deviceId": "CPU",
+            "runtimeVerified": true,
+            "cpuCompute": true
+          }
+        ]
+      }
+    },
+    "candidate": {
+      "listenAddress": "127.0.0.1:51074",
+      "engineLoaded": true,
+      "modelRepo": "lightonai/LightOnOCR-3-0.8B",
+      "model": "LIGHTON_MODEL_0_8B",
+      "provenance": {
+        "serviceVersion": "0.1.0",
+        "backendRevision": "f3586e66bc916d672773d4a6505513ba91a3595c",
+        "modelRevision": "36d8636925327c671bd8e479c517a004f7566bd9",
+        "modelSha256": "a73ab10d787c68cbfc518f51bfe044abcfb9dc27ce9c457f2068bf7d3ee0241d",
+        "projectorSha256": "a0af0fe69443cfe35edd1294466d0f1d9780682177a101944d0fe8a9f5b72bd4",
+        "device": "SYCL0",
+        "serverInstance": "krick-1",
+        "stages": [
+          {
+            "stage": "INFERENCE_STAGE_VISION",
+            "backend": "COMPUTE_BACKEND_SYCL",
+            "deviceName": "Intel(R) Arc(TM) Pro B70 Graphics",
+            "deviceId": "SYCL0",
+            "runtimeVerified": true,
+            "cpuCompute": false
+          },
+          {
+            "stage": "INFERENCE_STAGE_DECODER",
+            "backend": "COMPUTE_BACKEND_SYCL",
+            "deviceName": "Intel(R) Arc(TM) Pro B70 Graphics",
+            "deviceId": "SYCL0",
+            "runtimeVerified": true,
+            "cpuCompute": false
+          }
+        ]
+      }
+    }
+  },
+  "scope": "one invoice fixture repeated; not a general OCR quality or memory soak test"
+}

@@ -13,6 +13,11 @@ namespace lighton {
 
 namespace locrv1 = ai::pipestream::lightonocr::v1;
 
+// Only non-transport errors reach this projection. No prior request placement
+// is available when infer throws, so the failure carries unverified placement.
+void project_engine_error(const EngineError& error, uint32_t page_no,
+                          locrv1::PageFailure* failure);
+
 // Project native output without dropping raw tokens on parse/length failures.
 void project_native_result(const NativeResult& result, uint32_t page_no,
                            locrv1::LightonModel model, uint64_t first_step,

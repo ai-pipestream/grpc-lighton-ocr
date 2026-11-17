@@ -10,6 +10,8 @@ namespace lighton {
 
 struct Config {
   std::string listen_address = "0.0.0.0:50074";
+  std::string backend = "cpu";
+  std::string device; // Exact native device name, empty selects first matching backend.
   std::string models_dir = "/models";
   // GRPC_LIGHTON_MODEL: "0.8b" or "4b". Unset selects 0.8b; any other value
   // fails startup.

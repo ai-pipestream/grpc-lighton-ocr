@@ -1,0 +1,16 @@
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security_utils.cc:285:14: error: cannot initialize a variable of type 'X509_NAME *' (aka 'X509_name_st *') with an rvalue of type 'const X509_NAME *' (aka 'const X509_name_st *')
+  285 |   X509_NAME* cert_issuer_name = X509_get_issuer_name(cert);
+      |              ^                  ~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security_utils.cc:289:14: error: cannot initialize a variable of type 'X509_NAME *' (aka 'X509_name_st *') with an rvalue of type 'const X509_NAME *' (aka 'const X509_name_st *')
+  289 |   X509_NAME* crl_issuer_name = X509_CRL_get_issuer(crl);
+      |              ^                 ~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security_utils.cc:320:14: error: cannot initialize a variable of type 'X509_NAME *' (aka 'X509_name_st *') with an rvalue of type 'const X509_NAME *' (aka 'const X509_name_st *')
+  320 |   X509_NAME* issuer = X509_get_issuer_name(cert);
+      |              ^        ~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security_utils.cc:342:12: error: assigning to 'ASN1_OCTET_STRING *' (aka 'asn1_string_st *') from 'const ASN1_OCTET_STRING *' (aka 'const asn1_string_st *') discards qualifiers
+  342 |     akid = X509_EXTENSION_get_data(X509_get_ext(cert, j));
+      |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/tmp/lighton-openssl-check/src/core/tsi/ssl_transport_security_utils.cc:367:12: error: assigning to 'ASN1_OCTET_STRING *' (aka 'asn1_string_st *') from 'const ASN1_OCTET_STRING *' (aka 'const asn1_string_st *') discards qualifiers
+  367 |     akid = X509_EXTENSION_get_data(X509_CRL_get_ext(crl, j));
+      |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+5 errors generated.

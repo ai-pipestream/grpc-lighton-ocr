@@ -1,0 +1,90 @@
+{
+  "fixture_sha256": "a3d9057022912f90aa6de461dd60e87dd1ba64557c5c9638e086c8d5795b45f7",
+  "measured_two_page_rpc_seconds": {
+    "cpu": [
+      21.257871124999998,
+      21.685016041000004,
+      22.114546915999995,
+      21.94290358299999,
+      22.583350790999987
+    ],
+    "candidate": [
+      2.497697125000002,
+      2.603163084000002,
+      2.5747767919999944,
+      2.585191999999992,
+      2.452113374999996
+    ]
+  },
+  "median_speedup": 8.522254686766663,
+  "minimum_speedup": 1.0,
+  "info": {
+    "cpu": {
+      "listenAddress": "127.0.0.1:50075",
+      "engineLoaded": true,
+      "modelRepo": "lightonai/LightOnOCR-3-0.8B",
+      "model": "LIGHTON_MODEL_0_8B",
+      "provenance": {
+        "serviceVersion": "0.1.0",
+        "backendRevision": "f3586e66bc916d672773d4a6505513ba91a3595c",
+        "modelRevision": "36d8636925327c671bd8e479c517a004f7566bd9",
+        "modelSha256": "a73ab10d787c68cbfc518f51bfe044abcfb9dc27ce9c457f2068bf7d3ee0241d",
+        "projectorSha256": "a0af0fe69443cfe35edd1294466d0f1d9780682177a101944d0fe8a9f5b72bd4",
+        "device": "cpu",
+        "serverInstance": "krickert-mac",
+        "stages": [
+          {
+            "stage": "INFERENCE_STAGE_VISION",
+            "backend": "COMPUTE_BACKEND_CPU",
+            "deviceName": "Apple M2",
+            "deviceId": "CPU",
+            "runtimeVerified": true,
+            "cpuCompute": true
+          },
+          {
+            "stage": "INFERENCE_STAGE_DECODER",
+            "backend": "COMPUTE_BACKEND_CPU",
+            "deviceName": "Apple M2",
+            "deviceId": "CPU",
+            "runtimeVerified": true,
+            "cpuCompute": true
+          }
+        ]
+      }
+    },
+    "candidate": {
+      "listenAddress": "127.0.0.1:50074",
+      "engineLoaded": true,
+      "modelRepo": "lightonai/LightOnOCR-3-0.8B",
+      "model": "LIGHTON_MODEL_0_8B",
+      "provenance": {
+        "serviceVersion": "0.1.0",
+        "backendRevision": "f3586e66bc916d672773d4a6505513ba91a3595c",
+        "modelRevision": "36d8636925327c671bd8e479c517a004f7566bd9",
+        "modelSha256": "a73ab10d787c68cbfc518f51bfe044abcfb9dc27ce9c457f2068bf7d3ee0241d",
+        "projectorSha256": "a0af0fe69443cfe35edd1294466d0f1d9780682177a101944d0fe8a9f5b72bd4",
+        "device": "MTL0",
+        "serverInstance": "krickert-mac",
+        "stages": [
+          {
+            "stage": "INFERENCE_STAGE_VISION",
+            "backend": "COMPUTE_BACKEND_METAL",
+            "deviceName": "Apple M2",
+            "deviceId": "MTL0",
+            "runtimeVerified": true,
+            "cpuCompute": false
+          },
+          {
+            "stage": "INFERENCE_STAGE_DECODER",
+            "backend": "COMPUTE_BACKEND_METAL",
+            "deviceName": "Apple M2",
+            "deviceId": "MTL0",
+            "runtimeVerified": true,
+            "cpuCompute": false
+          }
+        ]
+      }
+    }
+  },
+  "scope": "one invoice fixture repeated; not a general OCR quality or memory soak test"
+}

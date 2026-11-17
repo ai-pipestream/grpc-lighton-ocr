@@ -1,0 +1,77 @@
+{
+  "tested_source_commit": "77dcad584b823ae38e1bb4fe3a87382db9592392",
+  "machine": "arm64",
+  "macos": "27.2",
+  "chip": "Apple M2",
+  "ram_bytes": 25769803776,
+  "rosetta": "0",
+  "source_sha256": {
+    "CMakeLists.txt": "2756219404dad03180a176563eb9fa84c7b08f6f768c8377ffc89f3a0fec9c7f",
+    "cmake/AppleBf16Dot.cmake": "fb9fc8031e4a03936c135364741d62c38355cedef51043e98262547752853fe3",
+    "cmake/AppleLlamaCompleteType.cmake": "0eb52b40fb38224cf9e5ca75927914c9930fa5e9ad1a8659c92cb7047d5f4ed9",
+    "cmake/ObserveGgmlPlacement.cmake": "30919f745f608e1f2caa1136545a29a1c1aef4d0efafcb8ea64e0bbf5ab9ba59",
+    "proto/ai/pipestream/document/v1/document.proto": "69e22a09e6b135eace5d0653a467a5e56c53543136f064988550a72734ea246b",
+    "proto/ai/pipestream/lightonocr/v1/lighton_ocr.proto": "c5543dcf6c77939396af94f66766cd35109f6dcbba78b7e4221a95fde08fb898",
+    "proto/org/apache/opennlp/grpc/v1/opennlp_annotations.proto": "2e351e2b8a9d207066a2efc4ec9a27025cc7be11c8e9477a810e4f549374d3eb",
+    "proto/org/apache/opennlp/grpc/v1/opennlp_document.proto": "5a3d13889ef1397d41deecc49bf72271eb916558997614b6cd82be1ac2ad0c5b",
+    "scripts/build-macos-metal.sh": "92646968a63a372ae8a2cbdaa762cac1e872876817cc8c1052d74c7152099f54",
+    "scripts/publish-manifests.sh": "d72baf0280900d88413668cee508a3ca5ce18e87083a306bd6bce3216b62edff",
+    "scripts/run-macos-metal.sh": "e64eda9527c2fea38a0fc3623969f41202e1a8d4b4e47bf57afe92a72edfa45d",
+    "scripts/smoke-test.sh": "f5ba5f8ea8f89a720df49f1d4c963ac0a697e3716e82c756581e4c1f270b8ccd",
+    "scripts/test-native-image.sh": "5d29a55d792a307838a260376c3ac72a4947a8741fcd62a3db00e9554893f4fd",
+    "src/config.cpp": "25a314a40474e2587dbb23c5391d95f8b261e31d562b905e7ac35453243fcead",
+    "src/config.h": "7d8e354e9e36b67738d458ab165ee207c6c1a70b64dc3621cb9632f1b8652c55",
+    "src/engine/inference_control.h": "7a46d2c7a7f24c527c47f0544c7756b7a3da37f5dad35dcf615d8925119d7d9a",
+    "src/engine/native_engine.cpp": "4265f7278cc61758f3b93a09649a2b79fc985fe1952364d8f94dd48063fe529d",
+    "src/engine/native_engine.h": "009dbf8d9f455bb640707b1025ff3d257a93ddfdc98d8facb92c4ce295138116",
+    "src/main.cpp": "2def6bae5cc67e01e8e6ec970d2a2eae66ee4ed31a63ed977759440804658578",
+    "src/parse/markdown.cpp": "d2c4ad801d3baedf68a61c218aaf313f1197d4ffead2be9a88a40a3380113241",
+    "src/parse/markdown.h": "2dd7a8843fc220815ea06ab39ab345a433d4f1a160737a3d33d9f27cdcbc95a8",
+    "src/service/lighton_service.cpp": "ae805c74f2535a36226587f6b3e3d0748f54ebaf3b885e1c2bf5db6d84ea7502",
+    "src/service/lighton_service.h": "0df729536067db16ed9019cabe14ee5a8bfe8a4c403c0c6feaad25b0f8705e0d",
+    "tests/apple_bf16_dot_test.cpp": "2ba28d6b323042b3dca401fec9d07302888827dd14a49357697ba3ba9d0d4261",
+    "tests/fixtures/native-invoice.png": "a3d9057022912f90aa6de461dd60e87dd1ba64557c5c9638e086c8d5795b45f7",
+    "tests/hardware_cancellation_test.py": "46ed31dcbafb50d1f7bcdac9c297a5afcde7229ec290516babfb88c36f5bd393",
+    "tests/hardware_rpc_checks_test.py": "274d6f30bee918449d768400a58090428639a0e4817e1ab056de28be75e1883d",
+    "tests/hardware_rpc_test.py": "8697543839579a1f000471c0fc7607c319560bafe909d16e4a2a7a700c79b2cd",
+    "tests/health.proto": "79559937b1bf562eec28cb9bc7683c9ee5677829a53fc224e8b65140edf364bd",
+    "tests/inference_control_test.cpp": "09e4508eff6224c5b7b864a67ab8226df7004e9cc83579c704c4c5c5c57600b0",
+    "tests/markdown_test.cpp": "c6c1545e21e357c9ff6b0a1b0d9838f0accf1c806ca7179c80dd43ae4115b82b",
+    "tests/metal_lifecycle_test.py": "5124e1cfea280238c2585d527f91b20d0248cd1fef8afc9c93fca516e5d83b78",
+    "tests/native_rpc_test.py": "630db79379fa5076241629880d941965d90d5b2fd9280a75049cba557dbab37a",
+    "tests/runtime_health_test.py": "feef01a5712925ebb362f2d21ba1aaa7241ab4bccd008ef7df0000dc75d121fd",
+    "tests/service_test.cpp": "4af7b708a2bc7c81f77249d04ca6a8e5d436f86a3f298846894c18435458b9b6",
+    "tests/shutdown_inference_test.py": "f7dcd8927ffaf7431e8b57c717f2cfb597d4a7a31dfe95275cea34cb14883f67",
+    "tools/native_lighton_probe.cpp": "cbd53f948ae06506c0200bf9833d7bdf03e919c189e2e540bfa605d25b8e5103",
+    "tools/prepare_model.py": "1bde7e07b51f7c6fb9a9a6034a1c44096da49802987c50c4bf98cd0397383ba4"
+  },
+  "binary_sha256": {
+    "grpc-lighton-ocr-server": "6b4f52497871d6d94f9697ff2705343168d496dba8cb0427e9bd0afc4e2dc5d4",
+    "inference_control_test": "a6053fa3cdc011562f8406fc020e7099c013500672da473e1a2805934dd5b5de",
+    "service_test": "2ff336e0fb1c9f76b724ff604a51154ef96641e32e84ac4fac7dd995da2db512"
+  },
+  "models_sha256": {
+    "model-bf16.gguf": "a73ab10d787c68cbfc518f51bfe044abcfb9dc27ce9c457f2068bf7d3ee0241d",
+    "vision-bf16.gguf": "a0af0fe69443cfe35edd1294466d0f1d9780682177a101944d0fe8a9f5b72bd4"
+  },
+  "performance_comparison": "Not repeated; previous paired performance belongs to source 1bfc1df0cdee5f17e211be07001996155facfad5.",
+  "runtime_commit": "f3586e66bc916d672773d4a6505513ba91a3595c",
+  "runtime_identity_method": "Pinned source archive, not git checkout; pristine source hashes compared with prior qualification.",
+  "runtime_pristine_sha256": {
+    "ggml/src/ggml-cpu/vec.cpp": "ed6690d3246f420c37d1441469a3631e365c24425f9722ca2f46651c88c1e292",
+    "ggml/src/ggml-backend.cpp": "7ea26359e7eda6957227d6e4c2a24a96aed622cbbca300b066580f7f3d95df5e",
+    "src/llama-memory-hybrid-idx.cpp": "08cbd47bcac5e481ef66c586c27510b210f34d76042dbafa6d51d9dbc489831a"
+  },
+  "generated_runtime_sha256": {
+    "apple-bf16-vec.cpp": "6d4d1be9fb57ca4e489e0e09992b56f78728278bedd21adb183be652f894d723",
+    "observed-ggml-backend.cpp": "0d9072526eb764d02ca7ddaee294ea7ff3f2e22e999ed5601a1d27ec6d66fbc4",
+    "apple-llama-memory-hybrid-idx.cpp": "d1b4a9f6e77579b6189b8579c10ae1987a5b3d88c89206fdd641478eb135a57d"
+  },
+  "toolchain": {
+    "clang --version": "Apple clang version 21.0.0 (clang-2100.4.1.1)\nTarget: arm64-apple-darwin27.2.0\nThread model: posix\nInstalledDir: /Library/Developer/CommandLineTools/usr/bin",
+    "cmake --version": "cmake version 4.4.4\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake).",
+    "pkg-config --modversion grpc++ protobuf": "1.85.1\n36.2.0",
+    "sw_vers": "ProductName:\t\tmacOS\nProductVersion:\t\t27.2\nBuildVersion:\t\t26B123",
+    "file /Users/krickert/work/astra-metal-20261108/grpc-lighton-ocr/build-metal/grpc-lighton-ocr-server": "/Users/krickert/work/astra-metal-20261108/grpc-lighton-ocr/build-metal/grpc-lighton-ocr-server: Mach-O 64-bit executable arm64"
+  }
+}

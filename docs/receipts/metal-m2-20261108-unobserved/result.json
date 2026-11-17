@@ -1,0 +1,12 @@
+{
+  "source": "bda85f4dd28ac6bad822e11d7673175c0eb504ed",
+  "two_page_seconds": 2.905171042,
+  "two_page_assertions": "PASS",
+  "cancel_recovery_cycles": 3,
+  "cancel_recovery": "PASS",
+  "comparison_repeated": false,
+  "mode": "unobserved-regression",
+  "observed_offload_claim": false,
+  "single_server_pid": 53380,
+  "server_alive_after_cycles": true
+}

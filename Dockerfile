@@ -14,7 +14,7 @@ ARG LIGHTON_RUNTIME_IMAGE=ubuntu:26.04
 FROM ubuntu:26.04 AS build
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates cmake g++ git ninja-build pkg-config \
+        ca-certificates cmake g++ git ninja-build pkg-config python3 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
@@ -22,7 +22,8 @@ ARG TARGETARCH
 RUN --mount=type=cache,id=grpc-lighton-ocr-ubuntu26-cxx23-grpc1.83.0-${TARGETARCH},target=/build \
     find /src/src /src/tests /src/proto -type f -exec touch {} + \
     && cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DLIGHTON_WERROR=ON \
-    && cmake --build /build --target grpc-lighton-ocr-server markdown_test service_test --parallel 2 \
+        -DBUILD_TESTING=ON -DLIGHTON_QUALIFICATION_MODELS= \
+    && cmake --build /build --parallel 2 \
     && ctest --test-dir /build --output-on-failure \
     && mkdir -p /out/lib /out/licenses && cp LICENSE /out/licenses/grpc-lighton-ocr-LICENSE \
     && cp /build/_deps/llama-src/LICENSE /out/licenses/llama.cpp-LICENSE \

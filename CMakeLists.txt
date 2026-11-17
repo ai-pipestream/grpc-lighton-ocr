@@ -19,6 +19,18 @@ endfunction()
 include(CTest)
 include(FetchContent)
 
+option(LIGHTON_SYSTEM_GRPC "Use installed native protobuf and gRPC" OFF)
+if(LIGHTON_SYSTEM_GRPC)
+  find_package(Protobuf CONFIG REQUIRED)
+  find_package(gRPC CONFIG REQUIRED)
+  add_executable(protoc ALIAS protobuf::protoc)
+  add_executable(grpc_cpp_plugin ALIAS gRPC::grpc_cpp_plugin)
+  add_library(grpc++ ALIAS gRPC::grpc++)
+  add_library(grpc++_reflection ALIAS gRPC::grpc++_reflection)
+  get_target_property(LIGHTON_PROTOBUF_INCLUDE protobuf::libprotobuf INTERFACE_INCLUDE_DIRECTORIES)
+  list(GET LIGHTON_PROTOBUF_INCLUDE 0 LIGHTON_PROTOBUF_INCLUDE)
+  set(LIGHTON_PROTOBUF_IMPORT_DIR "${LIGHTON_PROTOBUF_INCLUDE}")
+else()
 set(gRPC_INSTALL OFF CACHE BOOL "" FORCE)
 set(gRPC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(gRPC_BUILD_CSHARP_EXT OFF CACHE BOOL "" FORCE)
@@ -37,10 +49,32 @@ FetchContent_Declare(grpc
   GIT_SUBMODULES_RECURSE TRUE
   SYSTEM)
 FetchContent_MakeAvailable(grpc)
+if(gRPC_SSL_PROVIDER STREQUAL "package")
+  include(cmake/PatchGrpcOpenSSL.cmake)
+endif()
+set(LIGHTON_PROTOBUF_IMPORT_DIR "${protobuf_SOURCE_DIR}/src")
+endif()
 
-# CPU-only, in-process backend. No downloads or subprocesses during inference.
+# Model identity hashing uses EVP directly. Match gRPC's crypto provider so
+# bundled BoringSSL headers cannot accidentally be paired with system OpenSSL.
+if(LIGHTON_SYSTEM_GRPC OR gRPC_SSL_PROVIDER STREQUAL "package")
+  find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+  set(LIGHTON_CRYPTO_TARGET OpenSSL::Crypto)
+elseif(TARGET crypto)
+  set(LIGHTON_CRYPTO_TARGET crypto)
+  set(LIGHTON_CRYPTO_INCLUDE "${grpc_SOURCE_DIR}/third_party/boringssl-with-bazel/include")
+else()
+  message(FATAL_ERROR "LightOn requires gRPC's OpenSSL or bundled BoringSSL crypto provider")
+endif()
+
+# In-process backends. CPU remains available in every build.
+option(LIGHTON_CUDA "Build the native CUDA backend" OFF)
+option(LIGHTON_SYCL "Build the native SYCL backend" OFF)
+option(LIGHTON_METAL "Build the native Metal backend" OFF)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(GGML_CUDA OFF CACHE BOOL "" FORCE)
+set(GGML_CUDA ${LIGHTON_CUDA} CACHE BOOL "" FORCE)
+set(GGML_SYCL ${LIGHTON_SYCL} CACHE BOOL "" FORCE)
+set(GGML_METAL ${LIGHTON_METAL} CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
@@ -68,6 +102,9 @@ FetchContent_Declare(llama
   GIT_TAG f3586e66bc916d672773d4a6505513ba91a3595c
   SYSTEM)
 FetchContent_MakeAvailable(llama)
+include(cmake/AppleLlamaCompleteType.cmake)
+include(cmake/AppleBf16Dot.cmake)
+include(cmake/ObserveGgmlPlacement.cmake)
 
 set(LIGHTON_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(LIGHTON_PROTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/proto")
@@ -90,7 +127,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E make_directory "${LIGHTON_GENERATED_DIR}"
   COMMAND $<TARGET_FILE:protoc>
   ARGS --proto_path=${LIGHTON_PROTO_DIR}
-       --proto_path=${protobuf_SOURCE_DIR}/src
+       --proto_path=${LIGHTON_PROTOBUF_IMPORT_DIR}
        --cpp_out=${LIGHTON_GENERATED_DIR}
        --grpc_out=${LIGHTON_GENERATED_DIR}
        --plugin=protoc-gen-grpc=$<TARGET_FILE:grpc_cpp_plugin>
@@ -115,6 +152,10 @@ add_library(lighton_service STATIC
 target_include_directories(lighton_service PUBLIC src)
 target_include_directories(lighton_service SYSTEM PRIVATE "${llama_SOURCE_DIR}/vendor/stb")
 target_link_libraries(lighton_service PUBLIC lighton_parse llama mtmd)
+target_link_libraries(lighton_service PRIVATE ${LIGHTON_CRYPTO_TARGET})
+if(LIGHTON_CRYPTO_INCLUDE)
+  target_include_directories(lighton_service SYSTEM PRIVATE "${LIGHTON_CRYPTO_INCLUDE}")
+endif()
 lighton_warnings(lighton_service)
 
 add_executable(grpc-lighton-ocr-server src/main.cpp)
@@ -122,6 +163,15 @@ target_link_libraries(grpc-lighton-ocr-server PRIVATE lighton_service grpc++_ref
 lighton_warnings(grpc-lighton-ocr-server)
 
 if(BUILD_TESTING)
+  add_executable(scheduler_stop_test tests/scheduler_stop_test.cpp)
+  target_include_directories(scheduler_stop_test PRIVATE src "${llama_SOURCE_DIR}/ggml/src")
+  target_link_libraries(scheduler_stop_test PRIVATE ggml ggml-cpu)
+  lighton_warnings(scheduler_stop_test)
+  add_test(NAME scheduler_stop_test COMMAND scheduler_stop_test)
+  add_executable(inference_control_test tests/inference_control_test.cpp)
+  target_include_directories(inference_control_test PRIVATE src)
+  lighton_warnings(inference_control_test)
+  add_test(NAME inference_control_test COMMAND inference_control_test)
   add_executable(markdown_test tests/markdown_test.cpp)
   target_link_libraries(markdown_test PRIVATE lighton_parse)
   lighton_warnings(markdown_test)
@@ -131,6 +181,16 @@ if(BUILD_TESTING)
   target_link_libraries(service_test PRIVATE lighton_service)
   lighton_warnings(service_test)
   add_test(NAME service_test COMMAND service_test)
+endif()
+
+if(BUILD_TESTING)
+  find_package(Python3 QUIET COMPONENTS Interpreter)
+  if(Python3_Interpreter_FOUND)
+    foreach(check_name hardware_rpc_checks_test hardware_cancellation_checks_test)
+      add_test(NAME ${check_name} COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/${check_name}.py)
+    endforeach()
+  endif()
 endif()
 
 # Explicit qualification gate: supplied models are required, never skipped.
