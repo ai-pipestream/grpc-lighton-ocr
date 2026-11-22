@@ -19,10 +19,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /src
 COPY . .
 ARG TARGETARCH
+# Parallel compile jobs. The default suits a hosted runner.
+ARG LIGHTON_BUILD_JOBS=2
 RUN --mount=type=cache,id=grpc-lighton-ocr-ubuntu26-cxx23-grpc1.83.0-${TARGETARCH},target=/build \
     find /src/src /src/tests /src/proto -type f -exec touch {} + \
     && cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release -DLIGHTON_WERROR=ON \
-    && cmake --build /build --target grpc-lighton-ocr-server markdown_test service_test --parallel 2 \
+    && cmake --build /build --target grpc-lighton-ocr-server markdown_test service_test config_test placement_test --parallel ${LIGHTON_BUILD_JOBS} \
     && ctest --test-dir /build --output-on-failure \
     && mkdir -p /out/lib /out/licenses && cp LICENSE /out/licenses/grpc-lighton-ocr-LICENSE \
     && cp /build/_deps/llama-src/LICENSE /out/licenses/llama.cpp-LICENSE \

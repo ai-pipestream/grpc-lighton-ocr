@@ -1,0 +1,21 @@
+diff --git a/ggml/src/ggml-openvino/openvino/op/permute.cpp b/ggml/src/ggml-openvino/openvino/op/permute.cpp
+index df4f038..c18a93c 100644
+--- a/ggml/src/ggml-openvino/openvino/op/permute.cpp
++++ b/ggml/src/ggml-openvino/openvino/op/permute.cpp
+@@ -62,8 +62,14 @@ OutputVector translate_permute(const NodeContext & context) {
+     } else if (op_case == 2) {
+         auto perm = ov::op::v0::Constant::create(ov::element::i64, {4}, perm_values);
+         auto output_shape = context.get_output_shape().to_shape();
+-        auto n_heads = ov::op::v0::Constant::create(ov::element::i64, {1}, {output_shape[1]});
+-        auto head_size = ov::op::v0::Constant::create(ov::element::i64, {1}, {output_shape[3]});
++        // The Reshape below restores the layout of the VIEW, [n_seq, n_tokens, n_heads, head_size],
++        // before the Transpose. Take n_heads and head_size from the VIEW: they are output axes 1
++        // and 3 only for the (0, 2, 1, 3) permutation of an attention query. A vision encoder
++        // without flash attention permutes its value VIEW with (1, 2, 0, 3); with the output axes
++        // the Reshape then scrambled the tensor.
++        auto view_shape = context.get_input_shape(0).to_shape();
++        auto n_heads = ov::op::v0::Constant::create(ov::element::i64, {1}, {view_shape[2]});
++        auto head_size = ov::op::v0::Constant::create(ov::element::i64, {1}, {view_shape[3]});
+         auto n_seq_active = context.has_input("n_seq_active") ?
+                                 context.get_input("n_seq_active") :
+                                 ov::op::v0::Constant::create(ov::element::i64, {1}, {output_shape[0]});

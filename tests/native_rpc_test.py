@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """Required real-model RPC qualification. Missing models are failures, never skips.
 Usage: native_rpc_test.py SERVER MODEL_DIRECTORY [FIXTURE]
+LIGHTON_EXPECT_DEVICE names the device the server must report (default cpu);
+an accelerator reports "<device> - <runtime device name>".
+LIGHTON_BUSY_PAGES sets the page count of the requests that must still be
+running when admission and cancellation are probed (default 1; raise it for
+a device that finishes one page within the probe delay).
+LIGHTON_CANCEL_RECOVERY_SECONDS is how long a cancelled request may hold the
+engine before the next request must be admitted (default 1; a device that
+runs a stage of a page as one uninterruptible step needs that step's time).
 """
 import base64
 import json
@@ -20,6 +28,9 @@ with socket.socket() as sock:
     address = f'127.0.0.1:{sock.getsockname()[1]}'
 log = open('/tmp/lighton-native-rpc-server.log', 'w')
 external = os.environ.get('LIGHTON_RPC_ADDRESS')
+expected_device = os.environ.get('LIGHTON_EXPECT_DEVICE', 'cpu')
+busy_pages = int(os.environ.get('LIGHTON_BUSY_PAGES', '1'))
+cancel_recovery = float(os.environ.get('LIGHTON_CANCEL_RECOVERY_SECONDS', '1'))
 if external:
     address = external
 process = None if external else subprocess.Popen([server], env=dict(os.environ, GRPC_LIGHTON_LISTEN_ADDRESS=address,
@@ -51,7 +62,9 @@ try:
             raise RuntimeError('startup failed: '+info.stderr)
         time.sleep(.1)
     info = json.loads(info.stdout)
-    assert info['engineLoaded'] and info['provenance']['device'] == 'cpu', info
+    device = info['provenance']['device']
+    assert info['engineLoaded'] and (device == expected_device or
+                                     device.startswith(expected_device + ' - ')), info
     assert len(info['provenance']['modelSha256']) == 64
     health = subprocess.run(['grpcurl', '-plaintext', '-import-path', str(root/'tests'),
         '-proto', 'health.proto', '-d', json.dumps({'service':service.rstrip('/')}),
@@ -89,6 +102,17 @@ try:
     assert [c['ref'] for c in folded['body']['children']] == refs
     assert result[-1]['complete']['pagesOk'] == 2
     print('real RPC: two pages, text, bounded boxes, provenance, traces and folded refs PASS')
+    # A page of another raster size, then the first size again: a device
+    # that compiles its vision graph per size must serve each one correctly.
+    def words(response):
+        assert response.returncode == 0 and 'pageDocument' in response.stdout, response.stderr+response.stdout
+        document = next(e['pageDocument'] for e in events(response.stdout) if 'pageDocument' in e)['document']
+        return ' '.join(next(iter(t.values()))['base']['text'] for t in document['texts'])
+    tall = (root/'tests/fixtures/native-invoice-tall.png').read_bytes()
+    for raster in (tall, image):
+        text = words(call('ParseDocument', payload(raster)))
+        assert all(word in text for word in ['INVOICE', '1042', '125.00', 'Paid']), text
+    print('second raster size and the first again PASS')
     over = call('ParseDocument', payload(image, maxTokensPerPage=1025))
     assert over.returncode != 0 and 'ResourceExhausted' in over.stderr, over.stderr
     bomb = bytearray(image); bomb[16:24] = struct.pack('>II',10000,10000)
@@ -108,7 +132,7 @@ try:
     concurrent = subprocess.Popen(args + ['-max-time', '120', '-d', '@', address,
         service+'ParseDocument'], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, text=True)
-    concurrent.stdin.write(payload(image)); concurrent.stdin.close(); concurrent.stdin = None
+    concurrent.stdin.write(payload(image, pages=busy_pages)); concurrent.stdin.close(); concurrent.stdin = None
     try:
         time.sleep(.3)
         other = call('ParseDocument', payload(image))
@@ -119,10 +143,10 @@ try:
         if concurrent.poll() is None:
             concurrent.kill(); concurrent.wait()
     print('single-inference admission rejects concurrent decode PASS')
-    cancelled = call('ParseDocument', payload(image), .2)
+    cancelled = call('ParseDocument', payload(image, pages=busy_pages), .2)
     assert cancelled.returncode != 0 and 'DeadlineExceeded' in cancelled.stderr, cancelled.stderr
     # Cancellation must release admission promptly, not poison the next context.
-    time.sleep(1)
+    time.sleep(cancel_recovery)
     after = call('ParseDocument', payload(image))
     assert after.returncode == 0 and 'pageDocument' in after.stdout, after.stderr+after.stdout
     print('pixel/token bounds and deadline cancellation with subsequent inference PASS')

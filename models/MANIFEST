@@ -4,5 +4,16 @@ revision 36d8636925327c671bd8e479c517a004f7566bd9
 license Apache-2.0
 backend llama.cpp f3586e66bc916d672773d4a6505513ba91a3595c
 # Source files: source-manifest.json. Converted artifacts: SHA256SUMS.
-# Only CPU 0.8B is qualified. The 4B enum is retained for wire compatibility,
+# Two conversions of the same source files, both from tools/prepare_model.py:
+#   bf16  model-bf16.gguf + vision-bf16.gguf  GRPC_LIGHTON_DEVICE=cpu
+#   f16   model-f16.gguf  + vision-f16.gguf   GRPC_LIGHTON_DEVICE=openvino:*
+# The OpenVINO GPU plugin does not take BF16 weights, so OpenVINO devices load
+# F16. A device loads only its own pair and verifies both hashes at startup.
+# An OpenVINO device also loads the vision encoder exported from
+# vision-f16.gguf (scripts/export-vision-encoder.sh, OpenVINO 2026.4.1):
+#   vision-encoder-f16.xml + vision-encoder-f16.bin
+# It runs that encoder through the OpenVINO runtime; vision-f16.gguf is still
+# loaded, for page preprocessing and the prompt layout. Both files are in
+# SHA256SUMS and verified at startup; the export is reproducible.
+# Only 0.8B is qualified. The 4B enum is retained for wire compatibility,
 # but production startup rejects it. No implicit or remote model downloads.
